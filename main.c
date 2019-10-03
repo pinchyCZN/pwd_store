@@ -43,6 +43,8 @@ typedef struct{
 	int count;
 }PWD_LIST;
 
+PWD_LIST g_pwd_list={0};
+
 int create_listview(HWND hwnd,int ctrl_id)
 {
 	HWND hlistview;
@@ -247,7 +249,29 @@ void free_pwd_list(PWD_LIST *plist)
 }
 int add_pwd(PWD_LIST *list,WCHAR *user,WCHAR *pwd,WCHAR *desc)
 {
-
+	int result=FALSE;
+	int index,count,size;
+	PWD_ENTRY *entry;
+	index=count=list->count;
+	count++;
+	size=sizeof(PWD_ENTRY)*count;
+	entry=realloc(list->list,size);
+	if(entry){
+		list->list=entry;
+		entry=&entry[index];
+		if(0==desc)
+			desc=L"";
+		if(0==pwd)
+			pwd=L"";
+		if(0==user)
+			user=L"";
+		entry->desc=wcsdup(desc);
+		entry->pwd=wcsdup(pwd);
+		entry->user=wcsdup(user);
+		list->count=count;
+		result=TRUE;
+	}
+	return result;
 }
 int get_pwd_list(PWD_LIST *plist)
 {
@@ -269,11 +293,12 @@ int get_pwd_list(PWD_LIST *plist)
 		free(pwd);
 		free(desc);
 	}
-
+	return TRUE;
 }
 int populate_listview(HWND hlist,PWD_LIST *plist)
 {
 	int i,count;
+	int max_width=0;
 	int widths[3]={0};
 	HWND header=ListView_GetHeader(hlist);
 	count=plist->count;
@@ -320,8 +345,19 @@ int populate_listview(HWND hlist,PWD_LIST *plist)
 			widths[i]=x;
 	}
 	count=_countof(widths);
+	{
+		RECT rect={0};
+		int w;
+		GetWindowRect(hlist,&rect);
+		w=rect.right-rect.left;
+		if(w>0)
+			max_width=w;
+	}
 	for(i=0;i<count;i++){
-		ListView_SetColumnWidth(hlist,i,widths[i]+12);
+		int x=widths[i]+12;
+		if(max_width && x>max_width)
+			x=max_width;
+		ListView_SetColumnWidth(hlist,i,x);
 	}
 	return TRUE;
 }
@@ -333,6 +369,7 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 	switch(msg){
 	case WM_INITDIALOG:
 		{
+			HWND hlist;
 			int style;
 			HWND hgrip=GetDlgItem(hwnd,IDC_GRIPPY);
 			style=GetWindowLong(hgrip,GWL_STYLE);
@@ -341,6 +378,9 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 			create_listview(hwnd,IDC_LISTVIEW);
 			setup_listview(GetDlgItem(hwnd,IDC_LISTVIEW),col_names,_countof(col_names));
 			AnchorInit(hwnd,anchor_main_dlg,_countof(anchor_main_dlg));
+			get_pwd_list(&g_pwd_list);
+			hlist=GetDlgItem(hwnd,IDC_LISTVIEW);
+			populate_listview(hlist,&g_pwd_list);
 		}
 		break;
 	case WM_SIZE:
