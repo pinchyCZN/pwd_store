@@ -26,7 +26,7 @@ struct CONTROL_ANCHOR anchor_main_dlg[]={
 	{IDC_EDIT,ANCHOR_LEFT|ANCHOR_BOTTOM,0,0,0},
 	{IDC_DELETE,ANCHOR_LEFT|ANCHOR_BOTTOM,0,0,0},
 	{IDC_GRIPPY,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
-	{IDCANCEL,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
+	{IDC_SAVE_EXIT,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
 };
 
 WCHAR *col_names[]={
@@ -231,6 +231,16 @@ int get_ini_val(const WCHAR *section,const WCHAR *key,int *val)
 	}
 	return FALSE;
 }
+int set_ini_str(const WCHAR *section,const WCHAR *key,WCHAR *val)
+{
+	return WritePrivateProfileStringW(section,key,val,get_ini_fname());
+}
+int set_ini_val(const WCHAR *section,const WCHAR *key,int val)
+{
+	WCHAR str[80]={0};
+	_snwprintf(str,_countof(str),L"%u",val);
+	return WritePrivateProfileStringW(section,key,str,get_ini_fname());
+}
 void free_pwd_list(PWD_LIST *plist)
 {
 	int i,count;
@@ -271,7 +281,7 @@ int add_pwd(PWD_LIST *list,WCHAR *user,WCHAR *pwd,WCHAR *desc)
 	}
 	return result;
 }
-int get_pwd_list(PWD_LIST *plist)
+int load_pwd_list(PWD_LIST *plist)
 {
 	int i,count;
 	free_pwd_list(plist);
@@ -292,6 +302,84 @@ int get_pwd_list(PWD_LIST *plist)
 		free(desc);
 	}
 	return TRUE;
+}
+int save_pwd_list(PWD_LIST *plist)
+{
+	int i,count;
+	count=plist->count;
+	set_ini_val(L"SETTINGS",L"ENTRY_COUNT",count);
+	for(i=0;i<count;i++){
+		WCHAR section[80]={0};
+		PWD_ENTRY *entry=&plist->list[i];
+		_snwprintf(section,_countof(section),L"ENTRY%i",i);
+		set_ini_str(section,L"USER",entry->user);
+		set_ini_str(section,L"PWD",entry->pwd);
+		set_ini_str(section,L"DESC",entry->desc);
+	}
+	return TRUE;
+}
+int read_listview(HWND hlist,PWD_LIST *plist)
+{
+	int i,count;
+	WCHAR *tmp;
+	int tmp_size=4096;
+	int tmp_count=tmp_size/sizeof(WCHAR);
+	tmp=malloc(tmp_size);
+	if(0==tmp)
+		return FALSE;
+	free_pwd_list(plist);
+	count=ListView_GetItemCount(hlist);
+	for(i=0;i<count;i++){
+		WCHAR *user=0,*pwd=0,*desc=0;
+		LV_ITEM item={0};
+		item.mask=LVIF_TEXT;
+		memset(tmp,0,tmp_size);
+		item.iItem=i;
+		item.iSubItem=0;
+		item.pszText=tmp;
+		item.cchTextMax=tmp_count;
+		ListView_GetItem(hlist,&item);
+		user=wcsdup(tmp);
+		memset(tmp,0,tmp_size);
+		item.iSubItem=1;
+		ListView_GetItem(hlist,&item);
+		pwd=wcsdup(tmp);
+		memset(tmp,0,tmp_size);
+		item.iSubItem=2;
+		ListView_GetItem(hlist,&item);
+		desc=wcsdup(tmp);
+		add_pwd(plist,user,pwd,desc);
+		free(user);
+		free(pwd);
+		free(desc);
+	}
+	free(tmp);
+	return TRUE;
+}
+int compare_pwdlist(PWD_LIST *p1,PWD_LIST *p2)
+{
+	int result=0;
+	int i,count;
+	result=p1->count-p2->count;
+	if(result)
+		return result;
+	count=p1->count;
+	for(i=0;i<count;i++){
+		int x;
+		PWD_ENTRY *e1,*e2;
+		e1=&p1->list[i];
+		e2=&p2->list[i];
+		x=wcscmp(e1->user,e2->user);
+		if(x)
+			return x;
+		x=wcscmp(e1->pwd,e2->pwd);
+		if(x)
+			return x;
+		x=wcscmp(e1->desc,e2->desc);
+		if(x)
+			return x;
+	}
+	return result;
 }
 int populate_listview(HWND hlist,PWD_LIST *plist)
 {
@@ -636,6 +724,89 @@ BOOL CALLBACK entry_dlg(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 	return FALSE;
 }
 
+int split_words(WCHAR *str,WCHAR ***out,int *out_count)
+{
+	int index=0;
+	WCHAR *start=str;
+	int state=0;
+	WCHAR **list=0;
+	int list_count=0;
+	while(1){
+		int is_end=FALSE;
+		int parse=FALSE;
+		WCHAR a=str[index]++;
+		if(0==a || ' '==a){
+			if(0==state){
+				parse=TRUE;
+				state=1;
+			}
+		}else{
+			state=0;
+		}
+		if(0==a)
+			is_end=TRUE;
+		if(parse){
+			SIZE_T len,x1,x2;
+			x1=(SIZE_T)start;
+			x2=(SIZE_T)(&str[index]);
+			len=x2-x1;
+			if(len){
+				int size,list_index;
+				WCHAR **tmp;
+				size=(list_count+1)*sizeof(WCHAR*);
+				list_index=list_count;
+				tmp=realloc(list,size);
+				if(tmp){
+					WCHAR *s;
+					int slen=len+sizeof(WCHAR);
+					list=tmp;
+					s=calloc(slen,1);
+					if(s){
+						memcpy(s,start,len);
+						list[list_index]=s;
+					}
+					list_count=list_count+1;
+				}
+
+			}
+		}
+		if(is_end)
+			break;
+		index++;
+	}
+	*out=list;
+	*out_count=list_count;
+	return TRUE;
+}
+int filter_list(HWND hlist,int col,WCHAR *str)
+{
+	WCHAR **word_list=0;
+	int i,word_count=0;
+	split_words(str,&word_list,&word_count);
+	for(i=0;i<word_count;i++){
+		
+	}
+	return TRUE;
+}
+
+int save_list(HWND hlist)
+{
+	int i,count;
+	count=ListView_GetItemCount(hlist);
+	free_pwd_list(&g_pwd_list);
+	for(i=0;i<count;i++){
+		WCHAR *user=0,*pwd=0,*desc=0;
+		get_entry_text(hlist,i,&user,&pwd,&desc);
+		add_pwd(&g_pwd_list,user,pwd,desc);
+		free(user);
+		free(pwd);
+		free(desc);
+	}
+	save_pwd_list(&g_pwd_list);
+	return TRUE;
+}
+
+
 BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 {
 	switch(msg){
@@ -650,7 +821,7 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 			create_listview(hwnd,IDC_LISTVIEW);
 			setup_listview(GetDlgItem(hwnd,IDC_LISTVIEW),col_names,_countof(col_names));
 			AnchorInit(hwnd,anchor_main_dlg,_countof(anchor_main_dlg));
-			get_pwd_list(&g_pwd_list);
+			load_pwd_list(&g_pwd_list);
 			hlist=GetDlgItem(hwnd,IDC_LISTVIEW);
 			populate_listview(hlist,&g_pwd_list);
 		}
@@ -688,6 +859,19 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 							case VK_DELETE:
 								PostMessage(hwnd,WM_COMMAND,MAKEWPARAM(IDC_DELETE,0),0);
 								break;
+							case VK_F5:
+								populate_listview(hdr->hwndFrom,&g_pwd_list);
+								break;
+							}
+						}
+						break;
+					case NM_DBLCLK:
+						{
+							int index;
+							HWND hlist=GetDlgItem(hwnd,IDC_LISTVIEW);
+							index=get_focused_item(hlist);
+							if(index>=0){
+								PostMessage(hwnd,WM_COMMAND,MAKEWPARAM(IDC_EDIT,0),0);
 							}
 						}
 						break;
@@ -704,8 +888,6 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 			int code=HIWORD(wparam);
 			switch(id){
 			case IDC_LISTVIEW:
-				{
-				}
 				break;
 			case IDC_EDIT:
 			case IDC_ADD:
@@ -718,7 +900,37 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 			case IDOK:
 				break;
 			case IDCANCEL:
+				{
+					PWD_LIST list={0};
+					HWND hlist=GetDlgItem(hwnd,IDC_LISTVIEW);
+					int val;
+					read_listview(hlist,&list);
+					load_pwd_list(&g_pwd_list);
+					val=compare_pwdlist(&list,&g_pwd_list);
+					if(val){
+						int res=MessageBoxA(hwnd,"List has been modified.\r\nDo you want to exit?",
+							"Warning",MB_OKCANCEL|MB_SYSTEMMODAL);
+						if(IDOK!=res){
+							free_pwd_list(&list);
+							return FALSE;
+						}
+					}
+					PostQuitMessage(0);
+				}
+				break;
+			case IDC_SAVE_EXIT:
+				save_list(GetDlgItem(hwnd,IDC_LISTVIEW));
 				PostQuitMessage(0);
+				break;
+			case IDC_FILTER_DESC:
+				{
+					if(EN_CHANGE==code){
+						WCHAR tmp[80]={0};
+						HWND hlist=GetDlgItem(hwnd,IDC_LISTVIEW);
+						GetDlgItemText(hwnd,id,tmp,_countof(tmp));
+						filter_list(hlist,2,tmp);
+					}
+				}
 				break;
 			}
 		}
