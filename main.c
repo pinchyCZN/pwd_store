@@ -44,6 +44,7 @@ typedef struct{
 }PWD_LIST;
 
 PWD_LIST g_pwd_list={0};
+PWD_LIST g_first_pwd_list={0};
 
 int create_listview(HWND hwnd,int ctrl_id)
 {
@@ -255,7 +256,7 @@ void free_pwd_list(PWD_LIST *plist)
 	free(plist->list);
 	memset(plist,0,sizeof(PWD_LIST));
 }
-int add_pwd(PWD_LIST *list,WCHAR *user,WCHAR *pwd,WCHAR *desc)
+int add_pwd_entry(PWD_LIST *list,WCHAR *user,WCHAR *pwd,WCHAR *desc)
 {
 	int result=FALSE;
 	int index,count,size;
@@ -281,6 +282,9 @@ int add_pwd(PWD_LIST *list,WCHAR *user,WCHAR *pwd,WCHAR *desc)
 	}
 	return result;
 }
+int update_pwd_entry(&g_pwd_list,lparam_val,user,pwd,desc)
+{
+}
 int load_pwd_list(PWD_LIST *plist)
 {
 	int i,count;
@@ -295,7 +299,7 @@ int load_pwd_list(PWD_LIST *plist)
 		get_ini_str(section,L"PWD",&pwd);
 		get_ini_str(section,L"DESC",&desc);
 		if(user||pwd||desc){
-			add_pwd(plist,user,pwd,desc);
+			add_pwd_entry(plist,user,pwd,desc);
 		}
 		free(user);
 		free(pwd);
@@ -316,44 +320,6 @@ int save_pwd_list(PWD_LIST *plist)
 		set_ini_str(section,L"PWD",entry->pwd);
 		set_ini_str(section,L"DESC",entry->desc);
 	}
-	return TRUE;
-}
-int read_listview(HWND hlist,PWD_LIST *plist)
-{
-	int i,count;
-	WCHAR *tmp;
-	int tmp_size=4096;
-	int tmp_count=tmp_size/sizeof(WCHAR);
-	tmp=malloc(tmp_size);
-	if(0==tmp)
-		return FALSE;
-	free_pwd_list(plist);
-	count=ListView_GetItemCount(hlist);
-	for(i=0;i<count;i++){
-		WCHAR *user=0,*pwd=0,*desc=0;
-		LV_ITEM item={0};
-		item.mask=LVIF_TEXT;
-		memset(tmp,0,tmp_size);
-		item.iItem=i;
-		item.iSubItem=0;
-		item.pszText=tmp;
-		item.cchTextMax=tmp_count;
-		ListView_GetItem(hlist,&item);
-		user=wcsdup(tmp);
-		memset(tmp,0,tmp_size);
-		item.iSubItem=1;
-		ListView_GetItem(hlist,&item);
-		pwd=wcsdup(tmp);
-		memset(tmp,0,tmp_size);
-		item.iSubItem=2;
-		ListView_GetItem(hlist,&item);
-		desc=wcsdup(tmp);
-		add_pwd(plist,user,pwd,desc);
-		free(user);
-		free(pwd);
-		free(desc);
-	}
-	free(tmp);
 	return TRUE;
 }
 int compare_pwdlist(PWD_LIST *p1,PWD_LIST *p2)
@@ -502,6 +468,20 @@ int get_entry_text(HWND hlist,int index,WCHAR **user,WCHAR **pwd,WCHAR **desc)
 	free(tmp);
 	return result;
 }
+int get_entry_lparam(HWND hlist,int index,int *out)
+{
+	int result=FALSE;
+	LV_ITEM item={0};
+	int res;
+	item.mask=LVIF_PARAM;
+	item.iItem=index;
+	res=ListView_GetItem(hlist,&item);
+	if(res){
+		*out=item.lParam;
+		result=TRUE;
+	}
+	return result;
+}
 
 int set_entry_text(HWND hlist,int index,WCHAR *user,WCHAR *pwd,WCHAR *desc)
 {
@@ -510,14 +490,15 @@ int set_entry_text(HWND hlist,int index,WCHAR *user,WCHAR *pwd,WCHAR *desc)
 	ListView_SetItemText(hlist,index,2,desc);
 	return TRUE;
 }
-int add_entry_text(HWND hlist,WCHAR *user,WCHAR *pwd,WCHAR *desc)
+int add_entry_text(HWND hlist,int lparam_val,WCHAR *user,WCHAR *pwd,WCHAR *desc)
 {
 	int index,count;
 	LV_ITEM item={0};
 	count=ListView_GetItemCount(hlist);
-	item.mask=LVIF_TEXT;
+	item.mask=LVIF_TEXT|LVIF_PARAM;
 	item.iItem=count;
 	item.pszText=user;
+	item.lParam=lparam_val;
 	index=ListView_InsertItem(hlist,&item);
 	if(index>=0){
 		int state=LVIS_SELECTED|LVIS_FOCUSED;
@@ -636,6 +617,7 @@ BOOL CALLBACK entry_dlg(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 {
 	static int code=0;
 	static int item_index=0;
+	static int lparam_val=0;
 	static HWND hlist=0;
 	switch(msg){
 	case WM_INITDIALOG:
@@ -652,6 +634,8 @@ BOOL CALLBACK entry_dlg(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 					int res;
 					if(-1==item_index)
 						EndDialog(hwnd,0);
+					lparam_val=-1;
+					get_entry_lparam(hlist,item_index,&lparam_val);
 					res=get_entry_text(hlist,item_index,&user,&pwd,&desc);
 					if(res){
 						SetDlgItemTextW(hwnd,IDC_EDIT_USER,user);
@@ -700,10 +684,15 @@ BOOL CALLBACK entry_dlg(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 							&& get_hwnd_wchar(GetDlgItem(hwnd,IDC_EDIT_PWD),&pwd)
 							&& get_hwnd_wchar(GetDlgItem(hwnd,IDC_EDIT_DESC),&desc))
 						{
-							if(IDC_ADD==code)
-								add_entry_text(hlist,user,pwd,desc);
-							else
+							if(IDC_ADD==code){
+								int res;
+								res=add_pwd_entry(&g_pwd_list,user,pwd,desc);
+								if(res)
+									add_entry_text(hlist,g_pwd_list.count-1,user,pwd,desc);
+							}else{
 								set_entry_text(hlist,item_index,user,pwd,desc);
+								update_pwd_entry(&g_pwd_list,lparam_val,user,pwd,desc);
+							}
 						}
 						free(user);
 						free(pwd);
@@ -789,23 +778,6 @@ int filter_list(HWND hlist,int col,WCHAR *str)
 	return TRUE;
 }
 
-int save_list(HWND hlist)
-{
-	int i,count;
-	count=ListView_GetItemCount(hlist);
-	free_pwd_list(&g_pwd_list);
-	for(i=0;i<count;i++){
-		WCHAR *user=0,*pwd=0,*desc=0;
-		get_entry_text(hlist,i,&user,&pwd,&desc);
-		add_pwd(&g_pwd_list,user,pwd,desc);
-		free(user);
-		free(pwd);
-		free(desc);
-	}
-	save_pwd_list(&g_pwd_list);
-	return TRUE;
-}
-
 
 BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 {
@@ -822,6 +794,7 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 			setup_listview(GetDlgItem(hwnd,IDC_LISTVIEW),col_names,_countof(col_names));
 			AnchorInit(hwnd,anchor_main_dlg,_countof(anchor_main_dlg));
 			load_pwd_list(&g_pwd_list);
+			load_pwd_list(&g_first_pwd_list);
 			hlist=GetDlgItem(hwnd,IDC_LISTVIEW);
 			populate_listview(hlist,&g_pwd_list);
 		}
@@ -861,6 +834,7 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 								break;
 							case VK_F5:
 								populate_listview(hdr->hwndFrom,&g_pwd_list);
+								PostMessage(hwnd,WM_COMMAND,MAKEWPARAM(IDC_FILTER_DESC,0),0);
 								break;
 							}
 						}
@@ -901,17 +875,12 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 				break;
 			case IDCANCEL:
 				{
-					PWD_LIST list={0};
-					HWND hlist=GetDlgItem(hwnd,IDC_LISTVIEW);
 					int val;
-					read_listview(hlist,&list);
-					load_pwd_list(&g_pwd_list);
-					val=compare_pwdlist(&list,&g_pwd_list);
+					val=compare_pwdlist(&g_first_pwd_list,&g_pwd_list);
 					if(val){
 						int res=MessageBoxA(hwnd,"List has been modified.\r\nDo you want to exit?",
 							"Warning",MB_OKCANCEL|MB_SYSTEMMODAL);
 						if(IDOK!=res){
-							free_pwd_list(&list);
 							return FALSE;
 						}
 					}
@@ -919,7 +888,7 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 				}
 				break;
 			case IDC_SAVE_EXIT:
-				save_list(GetDlgItem(hwnd,IDC_LISTVIEW));
+				save_pwd_list(&g_pwd_list);
 				PostQuitMessage(0);
 				break;
 			case IDC_FILTER_DESC:
