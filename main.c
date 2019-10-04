@@ -54,7 +54,7 @@ int create_listview(HWND hwnd,int ctrl_id)
 	htmp=GetDlgItem(hwnd,ctrl_id);
 	if(0==htmp)
 		return FALSE;
-	GetWindowRect(hwnd,&rect);
+	GetWindowRect(htmp,&rect);
 	DestroyWindow(htmp);
 	w=rect.right-rect.left;
 	h=rect.bottom-rect.top;
@@ -65,6 +65,8 @@ int create_listview(HWND hwnd,int ctrl_id)
                                  (HMENU)IDC_LISTVIEW,
                                  ghinstance,
                                  NULL);
+	if(hlistview)
+		ListView_SetExtendedListViewStyle(hlistview,LVS_EX_FULLROWSELECT);
 	return TRUE;
 }
 int get_first_line_len(char *str)
@@ -110,10 +112,6 @@ int get_string_width_wc(HWND hwnd,void *str,int wide_char)
 	return 0;
 
 }
-int get_str_width(HWND hwnd,void *str)
-{
-	return get_string_width_wc(hwnd,str,FALSE);
-}
 int setup_listview(HWND hlist,WCHAR **cols,int count)
 {
 	int i;
@@ -127,7 +125,7 @@ int setup_listview(HWND hlist,WCHAR **cols,int count)
 		col.fmt=LVCFMT_LEFT;
 		col.pszText=tmp;
 		col.iSubItem=0;
-		col.cx=get_str_width(header,tmp)+12;
+		col.cx=get_string_width_wc(header,tmp,1)+12;
 		ListView_InsertColumn(hlist,i,&col);
 	}
 	return 0;
@@ -316,7 +314,7 @@ int populate_listview(HWND hlist,PWD_LIST *plist)
 		item.iSubItem=0;
 		item.pszText=tmp;
 		ListView_InsertItem(hlist,&item);
-		x=get_string_width_wc(header,tmp,0);
+		x=get_string_width_wc(header,tmp,1);
 		if(x>=val[0])
 			val[0]=x;
 		//---
@@ -325,7 +323,7 @@ int populate_listview(HWND hlist,PWD_LIST *plist)
 		item.iSubItem=1;
 		item.pszText=tmp;
 		ListView_SetItem(hlist,&item);
-		x=get_string_width_wc(header,tmp,0);
+		x=get_string_width_wc(header,tmp,1);
 		if(x>=val[0])
 			val[0]=x;
 		//---
@@ -334,13 +332,13 @@ int populate_listview(HWND hlist,PWD_LIST *plist)
 		item.iSubItem=2;
 		item.pszText=tmp;
 		ListView_SetItem(hlist,&item);
-		x=get_string_width_wc(header,tmp,0);
+		x=get_string_width_wc(header,tmp,1);
 		if(x>=val[0])
 			val[0]=x;
 	}
 	count=_countof(widths);
 	for(i=0;i<count;i++){
-		int x=get_string_width_wc(header,col_names[i],0);
+		int x=get_string_width_wc(header,col_names[i],1);
 		if(x>widths[i])
 			widths[i]=x;
 	}
@@ -361,8 +359,282 @@ int populate_listview(HWND hlist,PWD_LIST *plist)
 	}
 	return TRUE;
 }
+int get_focused_item(HWND hlist)
+{
+	int result=-1;
+	int i,count;
+	if(0==hlist)
+		return result;
+	count=ListView_GetItemCount(hlist);
+	for(i=0;i<count;i++){
+		int state=ListView_GetItemState(hlist,i,LVIS_FOCUSED);
+		if(LVIS_FOCUSED==state){
+			result=i;
+			break;
+		}
+	}
+	return result;
+}
+int get_entry_text(HWND hlist,int index,WCHAR **user,WCHAR **pwd,WCHAR **desc)
+{
+	int result=FALSE;
+	WCHAR *tmp=0;
+	int tmp_size=4096;
+	int tmp_count=tmp_size/sizeof(WCHAR);
+	LV_ITEM item={0};
+	tmp=malloc(tmp_size);
+	if(0==tmp){
+		return result;
+	}
+	memset(tmp,0,tmp_size);
+	item.mask=LVIF_TEXT;
+	item.iItem=index;
+	item.pszText=tmp;
+	item.cchTextMax=tmp_count;
+	ListView_GetItem(hlist,&item);
+	*user=wcsdup(tmp);
+	memset(tmp,0,tmp_size);
+	item.mask=LVIF_TEXT;
+	item.iItem=index;
+	item.pszText=tmp;
+	item.cchTextMax=tmp_count;
+	item.iSubItem=1;
+	ListView_GetItem(hlist,&item);
+	*pwd=wcsdup(tmp);
+	memset(tmp,0,tmp_size);
+	item.mask=LVIF_TEXT;
+	item.iItem=index;
+	item.pszText=tmp;
+	item.cchTextMax=tmp_count;
+	item.iSubItem=2;
+	ListView_GetItem(hlist,&item);
+	*desc=wcsdup(tmp);
+	if(user[0] && pwd[0] && desc[0])
+		result=TRUE;
+	free(tmp);
+	return result;
+}
 
+int set_entry_text(HWND hlist,int index,WCHAR *user,WCHAR *pwd,WCHAR *desc)
+{
+	ListView_SetItemText(hlist,index,0,user);
+	ListView_SetItemText(hlist,index,1,pwd);
+	ListView_SetItemText(hlist,index,2,desc);
+	return TRUE;
+}
+int add_entry_text(HWND hlist,WCHAR *user,WCHAR *pwd,WCHAR *desc)
+{
+	int index,count;
+	LV_ITEM item={0};
+	count=ListView_GetItemCount(hlist);
+	item.mask=LVIF_TEXT;
+	item.iItem=count;
+	item.pszText=user;
+	index=ListView_InsertItem(hlist,&item);
+	if(index>=0){
+		int state=LVIS_SELECTED|LVIS_FOCUSED;
+		item.mask=LVIF_TEXT;
+		item.iItem=count;
+		item.iSubItem=1;
+		item.pszText=pwd;
+		ListView_SetItem(hlist,&item);
+		item.mask=LVIF_TEXT;
+		item.iItem=count;
+		item.iSubItem=2;
+		item.pszText=desc;
+		ListView_SetItem(hlist,&item);
+		ListView_SetItemState(hlist,index,state,state);
+		return TRUE;
+	}
+	return FALSE;
+}
+int get_hwnd_wchar(HWND hwnd,WCHAR **out)
+{
+	WCHAR *tmp;
+	int tmp_size=4096;
+	int tmp_count=tmp_size/sizeof(WCHAR);
+	tmp=calloc(tmp_size,1);
+	if(0==tmp)
+		return FALSE;
+	GetWindowTextW(hwnd,tmp,tmp_count);
+	*out=wcsdup(tmp);
+	free(tmp);
+	return TRUE;
+}
+int auto_set_list_width(HWND hlist)
+{
+	WCHAR *tmp;
+	int tmp_size=4096;
+	int tmp_count=tmp_size/sizeof(WCHAR);
+	int i,count;
+	int widths[3]={0};
+	tmp=malloc(tmp_size);
+	if(0==tmp)
+		return FALSE;
+	count=ListView_GetItemCount(hlist);
+	for(i=0;i<count;i++){
+		int j;
+		for(j=0;j<_countof(widths);j++){
+			LV_ITEM item={0};
+			int x;
+			memset(tmp,0,tmp_size);
+			item.mask=LVIF_TEXT;
+			item.iItem=i;
+			item.iSubItem=j;
+			item.pszText=tmp;
+			item.cchTextMax=tmp_count;
+			ListView_GetItem(hlist,&item);
+			x=get_string_width_wc(hlist,tmp,1);
+			if(x>widths[j])
+				widths[j]=x;
+		}
+	}
+	for(i=0;i<_countof(widths);i++){
+		LV_COLUMN col={0};
+		col.mask=LVCF_WIDTH;
+		ListView_GetColumn(hlist,i,&col);
+		if(col.cx>widths[i])
+			widths[i]=col.cx;
+	}
+	for(i=0;i<_countof(widths);i++){
+		int x=widths[i];
+		if(x){
+			x+=12;
+			ListView_SetColumnWidth(hlist,i,x);
+		}
+	}
+	free(tmp);
+	return TRUE;
+}
 
+WNDPROC orig_edit_proc=0;
+BOOL CALLBACK edit_subclass(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
+{
+	switch(msg){
+	case WM_KEYDOWN:
+		{
+			int key=wparam;
+			if('A'==key){
+				int ctrl=GetKeyState(VK_CONTROL)&0x8000;
+				if(ctrl){
+					SendMessage(hwnd,EM_SETSEL,0,-1);
+					return 0;
+				}
+			}
+		}
+		break;
+	}
+	return CallWindowProc(orig_edit_proc,hwnd,msg,wparam,lparam);
+}
+int setup_edit_controls(HWND hwnd,int *list,int count)
+{
+	int i;
+	for(i=0;i<count;i++){
+		HWND hedit;
+		hedit=GetDlgItem(hwnd,list[i]);
+		if(hedit){
+			void *ptr;
+			SendMessage(hedit,EM_SETSEL,-1,-1);
+			ptr=(void*)GetWindowLong(hedit,GWL_WNDPROC);
+			if(ptr){
+				orig_edit_proc=ptr;
+				SetWindowLong(hedit,GWL_WNDPROC,(LONG)&edit_subclass);
+			}
+		}
+	}
+	return TRUE;
+}
+BOOL CALLBACK entry_dlg(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
+{
+	static int code=0;
+	static int item_index=0;
+	static HWND hlist=0;
+	switch(msg){
+	case WM_INITDIALOG:
+		{
+			hlist=GetDlgItem(ghdlg,IDC_LISTVIEW);
+			item_index=get_focused_item(hlist);
+			if(0==hlist)
+				EndDialog(hwnd,0);
+			code=lparam;
+			switch(code){
+			case IDC_EDIT:
+				{
+					WCHAR *user=0,*pwd=0,*desc=0;
+					int res;
+					if(-1==item_index)
+						EndDialog(hwnd,0);
+					res=get_entry_text(hlist,item_index,&user,&pwd,&desc);
+					if(res){
+						SetDlgItemTextW(hwnd,IDC_EDIT_USER,user);
+						SetDlgItemTextW(hwnd,IDC_EDIT_PWD,pwd);
+						SetDlgItemTextW(hwnd,IDC_EDIT_DESC,desc);
+					}
+					free(user);
+					free(pwd);
+					free(desc);
+				}
+				break;
+			}
+			{
+				int list[3]={IDC_EDIT_USER,IDC_EDIT_PWD,IDC_EDIT_DESC};
+				HWND huser=GetDlgItem(hwnd,IDC_EDIT_USER);
+				if(huser)
+					SetFocus(huser);
+				setup_edit_controls(hwnd,list,_countof(list));
+
+			}
+		}
+		break;
+	case WM_COMMAND:
+		{
+			int id=LOWORD(wparam);
+			switch(id){
+			case IDOK:
+				{
+					HWND hfocus;
+					char name[40]={0};
+					hfocus=GetFocus();
+					GetClassNameA(hfocus,name,sizeof(name));
+					strlwr(name);
+					if(strstr(name,"edit")){
+						int ext=GetKeyState(VK_CONTROL)&0x8000;
+						SendMessage(hwnd,WM_NEXTDLGCTL,ext,0);
+						return FALSE;
+					}
+				}
+				switch(code){
+				case IDC_EDIT:
+				case IDC_ADD:
+					{
+						WCHAR *user=0,*pwd=0,*desc=0;
+						if(get_hwnd_wchar(GetDlgItem(hwnd,IDC_EDIT_USER),&user)
+							&& get_hwnd_wchar(GetDlgItem(hwnd,IDC_EDIT_PWD),&pwd)
+							&& get_hwnd_wchar(GetDlgItem(hwnd,IDC_EDIT_DESC),&desc))
+						{
+							if(IDC_ADD==code)
+								add_entry_text(hlist,user,pwd,desc);
+							else
+								set_entry_text(hlist,item_index,user,pwd,desc);
+						}
+						free(user);
+						free(pwd);
+						free(desc);
+						auto_set_list_width(hlist);
+					}
+					break;
+				}
+				EndDialog(hwnd,id);
+				break;
+			case IDCANCEL:
+				EndDialog(hwnd,id);
+				break;
+			}
+		}
+		break;
+	}
+	return FALSE;
+}
 
 BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 {
@@ -388,17 +660,61 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 		break;
 	case WM_SIZING:
 		{
-			RECT dsize={0,0,300,300};
+			RECT dsize={0,0,500,300};
 			RECT *size=(RECT*)lparam;
 			if(size){
 				return ClampMinWindowSize(&dsize,wparam,size);
 			}
 		}
 		break;
+	case WM_NOTIFY:
+		{
+			int id=wparam;
+			NMHDR *hdr=(NMHDR*)lparam;
+			switch(id){
+			case IDC_LISTVIEW:
+				{
+					switch(hdr->code){
+					case LVN_KEYDOWN:
+						{
+							NMLVKEYDOWN *key=(NMLVKEYDOWN*)lparam;
+							switch(key->wVKey){
+							case VK_INSERT:
+								PostMessage(hwnd,WM_COMMAND,MAKEWPARAM(IDC_ADD,0),0);
+								break;
+							case VK_F2:
+								PostMessage(hwnd,WM_COMMAND,MAKEWPARAM(IDC_EDIT,0),0);
+								break;
+							case VK_DELETE:
+								PostMessage(hwnd,WM_COMMAND,MAKEWPARAM(IDC_DELETE,0),0);
+								break;
+							}
+						}
+						break;
+					}
+
+				}
+				break;
+			}
+		}
+		break;
 	case WM_COMMAND:
 		{
 			int id=LOWORD(wparam);
+			int code=HIWORD(wparam);
 			switch(id){
+			case IDC_LISTVIEW:
+				{
+				}
+				break;
+			case IDC_EDIT:
+			case IDC_ADD:
+				{
+					DialogBoxParam(ghinstance,MAKEINTRESOURCE(IDD_ENTRY),hwnd,&entry_dlg,id);
+				}
+				break;
+			case IDC_DELETE:
+				break;
 			case IDOK:
 				break;
 			case IDCANCEL:
@@ -421,6 +737,7 @@ int WINAPI WinMain(HINSTANCE hinstance,HINSTANCE hprev,LPSTR lpCmdLine,int nCmdS
 		MessageBoxA(NULL,"Unable to create window","ERROR",MB_OK|MB_SYSTEMMODAL);
 		return 0;
 	}
+	ghdlg=hwnd;
 	ShowWindow(hwnd,SW_SHOW);
 	while(1){
 		MSG msg;
@@ -429,6 +746,7 @@ int WINAPI WinMain(HINSTANCE hinstance,HINSTANCE hprev,LPSTR lpCmdLine,int nCmdS
 		if(0==res || -1==res){
 			break;
 		}
+
 		if(!IsDialogMessage(hwnd,&msg)){
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
