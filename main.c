@@ -282,8 +282,45 @@ int add_pwd_entry(PWD_LIST *list,WCHAR *user,WCHAR *pwd,WCHAR *desc)
 	}
 	return result;
 }
-int update_pwd_entry(&g_pwd_list,lparam_val,user,pwd,desc)
+int del_pwd_entry(PWD_LIST *list,const int index)
 {
+	int result=FALSE;
+	PWD_ENTRY *entry;
+	int count,size;
+	if(index<0 || index>=list->count)
+		return result;
+	count=list->count-1;
+	size=sizeof(PWD_ENTRY)*count;
+	entry=calloc(size,1);
+	if(entry){
+		int i,new_index=0;
+		for(i=0;i<list->count;i++){
+			if(index!=i){
+				entry[new_index++]=list->list[i];
+			}
+		}
+		result=TRUE;
+		free(list->list);
+		list->list=entry;
+		list->count=count;
+	}
+	return result;	
+}
+int update_pwd_entry(PWD_LIST *plist,int index,const WCHAR *user,const WCHAR *pwd,const WCHAR *desc)
+{
+	int result=FALSE;
+	PWD_ENTRY *pentry;
+	if(index<0 || index>=plist->count)
+		return result;
+	pentry=&plist->list[index];
+	free(pentry->desc);
+	free(pentry->pwd);
+	free(pentry->user);
+	pentry->desc=wcsdup(desc);
+	pentry->pwd=wcsdup(pwd);
+	pentry->user=wcsdup(user);
+	result=TRUE;
+	return result;
 }
 int load_pwd_list(PWD_LIST *plist)
 {
@@ -613,17 +650,28 @@ int setup_edit_controls(HWND hwnd,int *list,int count)
 	}
 	return TRUE;
 }
+int is_valid_entry(const WCHAR *a,const WCHAR *b,const WCHAR *c)
+{
+	int result=FALSE;
+	if(wcslen(a)>0)
+		result=TRUE;
+	if(wcslen(b)>0)
+		result=TRUE;
+	if(wcslen(c)>0)
+		result=TRUE;
+	return result;
+}
 BOOL CALLBACK entry_dlg(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 {
 	static int code=0;
-	static int item_index=0;
+	static int lv_item_index=0;
 	static int lparam_val=0;
 	static HWND hlist=0;
 	switch(msg){
 	case WM_INITDIALOG:
 		{
 			hlist=GetDlgItem(ghdlg,IDC_LISTVIEW);
-			item_index=get_focused_item(hlist);
+			lv_item_index=get_focused_item(hlist);
 			if(0==hlist)
 				EndDialog(hwnd,0);
 			code=lparam;
@@ -632,11 +680,11 @@ BOOL CALLBACK entry_dlg(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 				{
 					WCHAR *user=0,*pwd=0,*desc=0;
 					int res;
-					if(-1==item_index)
+					if(-1==lv_item_index)
 						EndDialog(hwnd,0);
 					lparam_val=-1;
-					get_entry_lparam(hlist,item_index,&lparam_val);
-					res=get_entry_text(hlist,item_index,&user,&pwd,&desc);
+					get_entry_lparam(hlist,lv_item_index,&lparam_val);
+					res=get_entry_text(hlist,lv_item_index,&user,&pwd,&desc);
 					if(res){
 						SetDlgItemTextW(hwnd,IDC_EDIT_USER,user);
 						SetDlgItemTextW(hwnd,IDC_EDIT_PWD,pwd);
@@ -685,12 +733,14 @@ BOOL CALLBACK entry_dlg(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 							&& get_hwnd_wchar(GetDlgItem(hwnd,IDC_EDIT_DESC),&desc))
 						{
 							if(IDC_ADD==code){
-								int res;
-								res=add_pwd_entry(&g_pwd_list,user,pwd,desc);
-								if(res)
-									add_entry_text(hlist,g_pwd_list.count-1,user,pwd,desc);
+								if(is_valid_entry(user,pwd,desc)){
+									int res;
+									res=add_pwd_entry(&g_pwd_list,user,pwd,desc);
+									if(res)
+										add_entry_text(hlist,g_pwd_list.count-1,user,pwd,desc);
+								}
 							}else{
-								set_entry_text(hlist,item_index,user,pwd,desc);
+								set_entry_text(hlist,lv_item_index,user,pwd,desc);
 								update_pwd_entry(&g_pwd_list,lparam_val,user,pwd,desc);
 							}
 						}
@@ -870,6 +920,21 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 				}
 				break;
 			case IDC_DELETE:
+				{
+					int index;
+					HWND hlist=GetDlgItem(hwnd,IDC_LISTVIEW);
+					index=get_focused_item(hlist);
+					if(index>=0){
+						int lv_param=-1;
+						get_entry_lparam(hlist,index,&lv_param);
+						if(lv_param>=0){
+							int r=del_pwd_entry(&g_pwd_list,lv_param);
+							if(r){
+								ListView_DeleteItem(hlist,index);
+							}
+						}
+					}
+				}
 				break;
 			case IDOK:
 				break;
