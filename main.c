@@ -796,6 +796,7 @@ int populate_entry_dlg(HWND hdlg,WCHAR *str)
 				break;
 			default:
 				_snwprintf(desc,desc_count,L"%s%s",desc,list[i]);
+				desc[desc_count-1]=0;
 				SetFocus(GetDlgItem(hdlg,IDC_EDIT_DESC));
 				break;
 			}
@@ -971,6 +972,7 @@ int filter_list(HWND hlist,WCHAR *str)
 
 BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 {
+	static int selected_column=0;
 	switch(msg){
 	case WM_INITDIALOG:
 		{
@@ -1037,6 +1039,11 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 							case 'V':
 								if(GetKeyState(VK_CONTROL)&0x8000){
 									PostMessage(hwnd,WM_COMMAND,MAKEWPARAM(IDC_PASTE,0),0);
+								}
+								break;
+							case 'C':
+								{
+									//copy to clip
 								}
 								break;
 							}
@@ -1126,6 +1133,7 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 						WCHAR tmp[80]={0};
 						HWND hlist=GetDlgItem(hwnd,IDC_LISTVIEW);
 						GetDlgItemText(hwnd,id,tmp,_countof(tmp));
+						wcslwr(tmp);
 						filter_list(hlist,tmp);
 					}
 				}
