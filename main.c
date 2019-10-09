@@ -57,7 +57,7 @@ int create_listview(HWND hwnd,int ctrl_id)
 	DestroyWindow(htmp);
 	w=rect.right-rect.left;
 	h=rect.bottom-rect.top;
-	hlistview=CreateWindow(WC_LISTVIEW,L"",WS_TABSTOP|WS_CHILD|WS_CLIPSIBLINGS|WS_VISIBLE|LVS_REPORT|LVS_SHOWSELALWAYS,
+	hlistview=CreateWindow(WC_LISTVIEW,L"",WS_TABSTOP|WS_CHILD|WS_CLIPSIBLINGS|WS_VISIBLE|LVS_REPORT|LVS_SHOWSELALWAYS|LVS_OWNERDRAWFIXED,
                                  0,0,
                                  w,h,
                                  hwnd,
@@ -599,10 +599,15 @@ int auto_set_list_width(HWND hlist)
 	}
 	for(i=0;i<_countof(widths);i++){
 		LV_COLUMN col={0};
-		col.mask=LVCF_WIDTH;
+		WCHAR str[80]={0};
+		int x;
+		col.mask=LVCF_TEXT;
+		col.pszText=str;
+		col.cchTextMax=_countof(str);
 		ListView_GetColumn(hlist,i,&col);
-		if(col.cx>widths[i])
-			widths[i]=col.cx;
+		x=get_string_width_wc(hlist,str,1);
+		if(x>widths[i])
+			widths[i]=x;
 	}
 	for(i=0;i<_countof(widths);i++){
 		int x=widths[i];
@@ -694,6 +699,33 @@ WCHAR *get_clipboard()
 		}
 	}
 	CloseClipboard();
+	return result;
+}
+int copy_to_clip(WCHAR *str)
+{
+	int len,size,result=FALSE;
+	HGLOBAL hmem;
+	len=wcslen(str);
+	if(len==0)
+		return result;
+	size=(len+1)*sizeof(WCHAR);
+	hmem=GlobalAlloc(GMEM_MOVEABLE|GMEM_DDESHARE,size);
+	if(hmem!=0){
+		WCHAR *lock;
+		lock=GlobalLock(hmem);
+		if(lock!=0){
+			memcpy(lock,str,size);
+			GlobalUnlock(hmem);
+			if(OpenClipboard(NULL)!=0){
+				EmptyClipboard();
+				SetClipboardData(CF_UNICODETEXT,hmem);
+				CloseClipboard();
+				result=TRUE;
+			}
+		}
+		if(!result)
+			GlobalFree(hmem);
+	}
 	return result;
 }
 void free_split_words(WCHAR ***list,int *count)
@@ -969,6 +1001,102 @@ int filter_list(HWND hlist,WCHAR *str)
 	free_split_words(&word_list,&word_count);
 	return TRUE;
 }
+int lv_get_column_count(HWND hlistview)
+{
+	HWND header;
+	int count=0;
+	header=(HWND)SendMessage(hlistview,LVM_GETHEADER,0,0);
+	if(header!=0){
+		count=SendMessage(header,HDM_GETITEMCOUNT,0,0);
+		if(count<0)
+			count=0;
+	}
+	return count;
+}
+int draw_item(DRAWITEMSTRUCT *di,int selected_col)
+{
+	int i,count,xpos;
+	int textcolor,bgcolor;
+	RECT bound_rect={0},client_rect={0};
+	static HBRUSH hbrush=0;
+
+	if(hbrush==0){
+		LOGBRUSH brush={0};
+		DWORD color=GetSysColor(COLOR_HIGHLIGHT);
+		brush.lbColor=color;
+		brush.lbStyle=BS_SOLID;
+		hbrush=CreateBrushIndirect(&brush);
+	}
+	count=lv_get_column_count(di->hwndItem);
+
+	GetClientRect(di->hwndItem,&client_rect);
+
+	bgcolor=GetSysColor(di->itemState&ODS_SELECTED ? COLOR_HIGHLIGHT:COLOR_WINDOW);
+	textcolor=GetSysColor(di->itemState&ODS_SELECTED ? COLOR_HIGHLIGHTTEXT:COLOR_WINDOWTEXT);
+	xpos=0;
+	for(i=0;i<count;i++){
+		WCHAR text[512]={0};
+		LV_ITEM lvi={0};
+		RECT rect;
+		int width,style;
+
+		width=ListView_GetColumnWidth(di->hwndItem,i);
+
+		rect=di->rcItem;
+		rect.left+=xpos;
+		rect.right=rect.left+width;
+		xpos+=width;
+
+
+		if(rect.right>=0 && rect.left<=client_rect.right){
+			lvi.mask=LVIF_TEXT;
+			lvi.iItem=di->itemID;
+			lvi.iSubItem=i;
+			lvi.pszText=text;
+			lvi.cchTextMax=sizeof(text);
+
+			ListView_GetItemText(di->hwndItem,di->itemID,i,text,sizeof(text));
+			text[sizeof(text)-1]=0;
+
+			if(selected_col==i){
+				bound_rect=rect;
+				bound_rect.bottom++;
+				bound_rect.right++;
+			}
+			if( (di->itemState&(ODS_FOCUS|ODS_SELECTED))==(ODS_FOCUS|ODS_SELECTED) && selected_col==i){
+				FillRect(di->hDC,&rect,hbrush);
+			}
+			else{
+				FillRect(di->hDC,&rect,(HBRUSH)(di->itemState&ODS_SELECTED ? COLOR_HIGHLIGHT+1:COLOR_WINDOW+1));
+			}
+			{
+				RECT tmprect=rect;
+				tmprect.bottom++;
+				tmprect.right++;
+				FrameRect(di->hDC,&tmprect,GetStockObject(DKGRAY_BRUSH));
+			}
+
+			if(text[0]!=0){
+				SetTextColor(di->hDC,textcolor);
+				SetBkColor(di->hDC,bgcolor);
+
+				style=DT_LEFT|DT_NOPREFIX;
+
+				rect.left++;
+				rect.right--;
+				DrawText(di->hDC,text,-1,&rect,style);
+			}
+		}
+	}
+	if(di->itemState&ODS_FOCUS){
+		SetTextColor(di->hDC,0x0000FF);
+		bound_rect.right--;
+		bound_rect.bottom--;
+		DrawFocusRect(di->hDC,&bound_rect);
+	}
+	return TRUE;
+
+}
 
 BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 {
@@ -993,7 +1121,6 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 				int list[1]={IDC_FILTER_DESC};
 				setup_edit_controls(hwnd,list,1);
 			}
-
 		}
 		break;
 	case WM_SIZE:
@@ -1042,10 +1169,45 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 								}
 								break;
 							case 'C':
-								{
-									//copy to clip
+								if(GetKeyState(VK_CONTROL)&0x8000){
+									HWND hlist=hdr->hwndFrom;
+									int index=get_focused_item(hlist);
+									if(index>=0){
+										WCHAR tmp[512]={0};
+										ListView_GetItemText(hlist,index,selected_column,tmp,_countof(tmp));
+										copy_to_clip(tmp);
+									}
 								}
 								break;
+							case VK_LEFT:
+								selected_column--;
+								if(selected_column<0)
+									selected_column=0;
+								break;
+							case VK_RIGHT:
+								selected_column++;
+								if(selected_column>2)
+									selected_column=2;
+								break;
+							}
+						}
+						break;
+					case NM_RCLICK:
+					case NM_CLICK:
+						{
+							LV_HITTESTINFO lvhit={0};
+							int res;
+							HWND hlist=hdr->hwndFrom;
+							GetCursorPos(&lvhit.pt);
+							ScreenToClient(hlist,&lvhit.pt);
+							res=ListView_SubItemHitTest(hlist,&lvhit);
+							if(res){
+								int index=lvhit.iSubItem;
+								if(index>=0 && index<=2){
+									selected_column=index;
+									ListView_RedrawItems(hlist,lvhit.iItem,lvhit.iItem);
+									UpdateWindow(hlist);
+								}
 							}
 						}
 						break;
@@ -1063,6 +1225,15 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 
 				}
 				break;
+			}
+		}
+		break;
+	case WM_DRAWITEM:
+		{
+			DRAWITEMSTRUCT *di=(DRAWITEMSTRUCT *)lparam;
+			if(di!=0 && di->CtlType==ODT_LISTVIEW){
+				draw_item(di,selected_column);
+				return TRUE;
 			}
 		}
 		break;
