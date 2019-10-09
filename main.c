@@ -30,6 +30,10 @@ struct CONTROL_ANCHOR anchor_main_dlg[]={
 WCHAR *col_names[]={
 	L"USER",L"PASSWORD",L"DESCRIPTION"
 };
+#define SECTION_WINDOW L"WINDOW"
+#define KEY_XPOS L"XPOS"
+#define KEY_YPOS L"YPOS"
+
 typedef struct{
 	WCHAR *user;
 	WCHAR *pwd;
@@ -1097,6 +1101,57 @@ int draw_item(DRAWITEMSTRUCT *di,int selected_col)
 	return TRUE;
 
 }
+void restore_position(HWND hwnd)
+{
+	int x=0,y=0;
+	HWND hdesk;
+	RECT rect={0};
+	RECT app_rect={0};
+	int w,h;
+	GetWindowRect(hwnd,&app_rect);
+	w=app_rect.right-app_rect.left;
+	h=app_rect.bottom-app_rect.top;
+	hdesk=GetDesktopWindow();
+	if(hdesk){
+		int cx,cy;
+		GetClientRect(hdesk,&rect);
+		cx=(rect.right-rect.left)/2;
+		cy=(rect.bottom-rect.top)/2;
+		cx-=w/2;
+		cy-=h/2;
+		if(cx<0)
+			cx=0;
+		if(cy<0)
+			cy=0;
+		x=cx;
+		y=cy;
+	}
+	get_ini_val(SECTION_WINDOW,KEY_XPOS,&x);
+	get_ini_val(SECTION_WINDOW,KEY_YPOS,&y);
+	if(hdesk){
+		if((x+w)>rect.right)
+			x=rect.right-w;
+		if((y+h)>rect.bottom)
+			y=rect.bottom-h;
+		if(x<rect.left)
+			x=rect.left;
+		if(y<rect.top)
+			y=rect.top;
+	}
+	SetWindowPos(hwnd,NULL,x,y,0,0,SWP_NOZORDER|SWP_NOSIZE);
+}
+void save_position(HWND hwnd)
+{
+	RECT rect={0};
+	GetWindowRect(hwnd,&rect);
+	set_ini_val(SECTION_WINDOW,KEY_XPOS,rect.left);
+	set_ini_val(SECTION_WINDOW,KEY_YPOS,rect.top);
+}
+void quit_dialog(HWND hwnd)
+{
+	save_position(hwnd);
+	PostQuitMessage(0);
+}
 
 BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 {
@@ -1117,6 +1172,7 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 			load_pwd_list(&g_first_pwd_list);
 			hlist=GetDlgItem(hwnd,IDC_LISTVIEW);
 			populate_listview(hlist,&g_pwd_list);
+			restore_position(hwnd);
 			{
 				int list[1]={IDC_FILTER_DESC};
 				setup_edit_controls(hwnd,list,1);
@@ -1196,12 +1252,11 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 					case NM_CLICK:
 						{
 							LV_HITTESTINFO lvhit={0};
-							int res;
 							HWND hlist=hdr->hwndFrom;
 							GetCursorPos(&lvhit.pt);
 							ScreenToClient(hlist,&lvhit.pt);
-							res=ListView_SubItemHitTest(hlist,&lvhit);
-							if(res){
+							ListView_SubItemHitTest(hlist,&lvhit);
+							{
 								int index=lvhit.iSubItem;
 								if(index>=0 && index<=2){
 									selected_column=index;
@@ -1291,12 +1346,12 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 							return FALSE;
 						}
 					}
-					PostQuitMessage(0);
+					quit_dialog(hwnd);
 				}
 				break;
 			case IDC_SAVE_EXIT:
 				save_pwd_list(&g_pwd_list);
-				PostQuitMessage(0);
+				quit_dialog(hwnd);
 				break;
 			case IDC_FILTER_DESC:
 				{
