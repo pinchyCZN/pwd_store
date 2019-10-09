@@ -18,10 +18,8 @@ HWND ghdlg=0;
 
 struct CONTROL_ANCHOR anchor_main_dlg[]={
 	{IDC_LISTVIEW,ANCHOR_LEFT|ANCHOR_RIGHT|ANCHOR_BOTTOM|ANCHOR_TOP,0,0,0},
-	{IDC_STATIC_FL,ANCHOR_LEFT|ANCHOR_BOTTOM,0,0,0},
-	{IDC_STATIC_FR,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
-	{IDC_FILTER_NAME,ANCHOR_LEFT|ANCHOR_BOTTOM,0,0,0},
-	{IDC_FILTER_DESC,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
+	{IDC_STATIC_FR,ANCHOR_LEFT|ANCHOR_BOTTOM,0,0,0},
+	{IDC_FILTER_DESC,ANCHOR_LEFT|ANCHOR_BOTTOM,0,0,0},
 	{IDC_ADD,ANCHOR_LEFT|ANCHOR_BOTTOM,0,0,0},
 	{IDC_EDIT,ANCHOR_LEFT|ANCHOR_BOTTOM,0,0,0},
 	{IDC_DELETE,ANCHOR_LEFT|ANCHOR_BOTTOM,0,0,0},
@@ -386,7 +384,7 @@ int compare_pwdlist(PWD_LIST *p1,PWD_LIST *p2)
 }
 int populate_listview(HWND hlist,PWD_LIST *plist)
 {
-	int i,count;
+	int i,count,index=0;
 	int max_width=0;
 	int widths[3]={0};
 	HWND header=ListView_GetHeader(hlist);
@@ -398,12 +396,15 @@ int populate_listview(HWND hlist,PWD_LIST *plist)
 		WCHAR *tmp;
 		int *val;
 		int x;
+		if(0==entry->user)
+			continue;
 		tmp=entry->user;
 		val=&widths[0];
-		item.mask=LVIF_TEXT;
-		item.iItem=i;
+		item.mask=LVIF_TEXT|LVIF_PARAM;
+		item.iItem=index++;
 		item.iSubItem=0;
 		item.pszText=tmp;
+		item.lParam=i;
 		ListView_InsertItem(hlist,&item);
 		x=get_string_width_wc(header,tmp,1);
 		if(x>=val[0])
@@ -411,6 +412,7 @@ int populate_listview(HWND hlist,PWD_LIST *plist)
 		//---
 		tmp=entry->pwd;
 		val=&widths[1];
+		item.mask=LVIF_TEXT;
 		item.iSubItem=1;
 		item.pszText=tmp;
 		ListView_SetItem(hlist,&item);
@@ -661,108 +663,50 @@ int is_valid_entry(const WCHAR *a,const WCHAR *b,const WCHAR *c)
 		result=TRUE;
 	return result;
 }
-BOOL CALLBACK entry_dlg(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
+void handle_paste_str(HWND hlist,WCHAR *str)
 {
-	static int code=0;
-	static int lv_item_index=0;
-	static int lparam_val=0;
-	static HWND hlist=0;
-	switch(msg){
-	case WM_INITDIALOG:
-		{
-			hlist=GetDlgItem(ghdlg,IDC_LISTVIEW);
-			lv_item_index=get_focused_item(hlist);
-			if(0==hlist)
-				EndDialog(hwnd,0);
-			code=lparam;
-			switch(code){
-			case IDC_EDIT:
-				{
-					WCHAR *user=0,*pwd=0,*desc=0;
-					int res;
-					if(-1==lv_item_index)
-						EndDialog(hwnd,0);
-					lparam_val=-1;
-					get_entry_lparam(hlist,lv_item_index,&lparam_val);
-					res=get_entry_text(hlist,lv_item_index,&user,&pwd,&desc);
-					if(res){
-						SetDlgItemTextW(hwnd,IDC_EDIT_USER,user);
-						SetDlgItemTextW(hwnd,IDC_EDIT_PWD,pwd);
-						SetDlgItemTextW(hwnd,IDC_EDIT_DESC,desc);
-					}
-					free(user);
-					free(pwd);
-					free(desc);
-				}
-				break;
-			}
-			{
-				int list[3]={IDC_EDIT_USER,IDC_EDIT_PWD,IDC_EDIT_DESC};
-				HWND huser=GetDlgItem(hwnd,IDC_EDIT_USER);
-				if(huser)
-					SetFocus(huser);
-				setup_edit_controls(hwnd,list,_countof(list));
-
-			}
+	int i,len,line_count=0;
+	len=wcslen(str);
+	for(i=0;i<len;i++){
+		WCHAR a=str[i];
+		if(L'\n'==a){
+			line_count++;
 		}
-		break;
-	case WM_COMMAND:
-		{
-			int id=LOWORD(wparam);
-			switch(id){
-			case IDOK:
-				{
-					HWND hfocus;
-					char name[40]={0};
-					hfocus=GetFocus();
-					GetClassNameA(hfocus,name,sizeof(name));
-					strlwr(name);
-					if(strstr(name,"edit")){
-						int ext=GetKeyState(VK_CONTROL)&0x8000;
-						SendMessage(hwnd,WM_NEXTDLGCTL,ext,0);
-						return FALSE;
-					}
-				}
-				switch(code){
-				case IDC_EDIT:
-				case IDC_ADD:
-					{
-						WCHAR *user=0,*pwd=0,*desc=0;
-						if(get_hwnd_wchar(GetDlgItem(hwnd,IDC_EDIT_USER),&user)
-							&& get_hwnd_wchar(GetDlgItem(hwnd,IDC_EDIT_PWD),&pwd)
-							&& get_hwnd_wchar(GetDlgItem(hwnd,IDC_EDIT_DESC),&desc))
-						{
-							if(IDC_ADD==code){
-								if(is_valid_entry(user,pwd,desc)){
-									int res;
-									res=add_pwd_entry(&g_pwd_list,user,pwd,desc);
-									if(res)
-										add_entry_text(hlist,g_pwd_list.count-1,user,pwd,desc);
-								}
-							}else{
-								set_entry_text(hlist,lv_item_index,user,pwd,desc);
-								update_pwd_entry(&g_pwd_list,lparam_val,user,pwd,desc);
-							}
-						}
-						free(user);
-						free(pwd);
-						free(desc);
-						auto_set_list_width(hlist);
-					}
-					break;
-				}
-				EndDialog(hwnd,id);
-				break;
-			case IDCANCEL:
-				EndDialog(hwnd,id);
-				break;
-			}
-		}
-		break;
 	}
-	return FALSE;
-}
+	if(0==line_count)
+		return;
 
+}
+WCHAR *get_clipboard()
+{
+	WCHAR *result=0;
+	int res;
+	HANDLE hclip;
+	res=OpenClipboard(NULL);
+	if(!res)
+		return result;
+	hclip=GetClipboardData(CF_UNICODETEXT);
+	if(hclip){
+		WCHAR *str=GlobalLock(hclip);
+		if(str){
+			result=wcsdup(str);
+			GlobalUnlock(hclip);
+		}
+	}
+	CloseClipboard();
+	return result;
+}
+void free_split_words(WCHAR ***list,int *count)
+{
+	int i,__count=*count;
+	WCHAR **__list=*list;
+	for(i=0;i<__count;i++){
+		free(__list[i]);
+	}
+	free(__list);
+	*list=0;
+	*count=0;
+}
 int split_words(WCHAR *str,WCHAR ***out,int *out_count)
 {
 	int index=0;
@@ -773,13 +717,15 @@ int split_words(WCHAR *str,WCHAR ***out,int *out_count)
 	while(1){
 		int is_end=FALSE;
 		int parse=FALSE;
-		WCHAR a=str[index]++;
+		WCHAR a=str[index];
 		if(0==a || ' '==a){
 			if(0==state){
 				parse=TRUE;
 				state=1;
 			}
 		}else{
+			if(1==state)
+				start=&str[index];
 			state=0;
 		}
 		if(0==a)
@@ -817,17 +763,211 @@ int split_words(WCHAR *str,WCHAR ***out,int *out_count)
 	*out_count=list_count;
 	return TRUE;
 }
-int filter_list(HWND hlist,int col,WCHAR *str)
+
+int populate_entry_dlg(HWND hdlg,WCHAR *str)
+{
+	int result=FALSE;
+	int i,len;
+	WCHAR **list=0;
+	int list_count=0;
+	if(0==str)
+		return result;
+	len=wcslen(str);
+	for(i=0;i<len;i++){
+		WCHAR a=str[i];
+		if(iswspace(a)){
+			str[i]=L' ';
+		}
+	}
+	split_words(str,&list,&list_count);
+	{
+		int desc_count=4096;
+		WCHAR *desc=calloc(desc_count+1,sizeof(WCHAR));
+		for(i=0;i<list_count;i++){
+			switch(i){
+			case 0:
+				result=TRUE;
+				SetDlgItemText(hdlg,IDC_EDIT_USER,list[i]);
+				SetFocus(GetDlgItem(hdlg,IDC_EDIT_USER));
+				break;
+			case 1:
+				SetDlgItemText(hdlg,IDC_EDIT_PWD,list[i]);
+				SetFocus(GetDlgItem(hdlg,IDC_EDIT_PWD));
+				break;
+			default:
+				_snwprintf(desc,desc_count,L"%s%s",desc,list[i]);
+				SetFocus(GetDlgItem(hdlg,IDC_EDIT_DESC));
+				break;
+			}
+		}
+		SetDlgItemText(hdlg,IDC_EDIT_DESC,desc);
+		free(desc);
+	}
+	free_split_words(&list,&list_count);
+	return result;
+}
+
+BOOL CALLBACK entry_dlg(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
+{
+	static int code=0;
+	static int lv_item_index=0;
+	static int lparam_val=0;
+	static HWND hlist=0;
+	switch(msg){
+	case WM_INITDIALOG:
+		{
+			int set_focus_user=TRUE;
+			hlist=GetDlgItem(ghdlg,IDC_LISTVIEW);
+			lv_item_index=get_focused_item(hlist);
+			if(0==hlist)
+				EndDialog(hwnd,0);
+			code=lparam;
+			switch(code){
+			case IDC_EDIT:
+				{
+					WCHAR *user=0,*pwd=0,*desc=0;
+					int res;
+					if(-1==lv_item_index)
+						EndDialog(hwnd,0);
+					lparam_val=-1;
+					get_entry_lparam(hlist,lv_item_index,&lparam_val);
+					res=get_entry_text(hlist,lv_item_index,&user,&pwd,&desc);
+					if(res){
+						SetDlgItemTextW(hwnd,IDC_EDIT_USER,user);
+						SetDlgItemTextW(hwnd,IDC_EDIT_PWD,pwd);
+						SetDlgItemTextW(hwnd,IDC_EDIT_DESC,desc);
+					}
+					free(user);
+					free(pwd);
+					free(desc);
+				}
+				break;
+			case IDC_PASTE:
+				{
+					WCHAR *str;
+					str=get_clipboard();
+					if(0==str)
+						EndDialog(hwnd,0);
+					if(!populate_entry_dlg(hwnd,str))
+						EndDialog(hwnd,0);
+					set_focus_user=FALSE;
+				}
+				break;
+			}
+			{
+				int list[3]={IDC_EDIT_USER,IDC_EDIT_PWD,IDC_EDIT_DESC};
+				setup_edit_controls(hwnd,list,_countof(list));
+			}
+			if(set_focus_user){
+				HWND huser=GetDlgItem(hwnd,IDC_EDIT_USER);
+				if(huser)
+					SetFocus(huser);
+			}
+		}
+		break;
+	case WM_COMMAND:
+		{
+			int id=LOWORD(wparam);
+			switch(id){
+			case IDOK:
+				{
+					HWND hfocus;
+					char name[40]={0};
+					hfocus=GetFocus();
+					GetClassNameA(hfocus,name,sizeof(name));
+					strlwr(name);
+					if(strstr(name,"edit")){
+						int ext=GetKeyState(VK_CONTROL)&0x8000;
+						SendMessage(hwnd,WM_NEXTDLGCTL,ext,0);
+						return FALSE;
+					}
+				}
+				switch(code){
+				case IDC_PASTE:
+				case IDC_EDIT:
+				case IDC_ADD:
+					{
+						WCHAR *user=0,*pwd=0,*desc=0;
+						if(get_hwnd_wchar(GetDlgItem(hwnd,IDC_EDIT_USER),&user)
+							&& get_hwnd_wchar(GetDlgItem(hwnd,IDC_EDIT_PWD),&pwd)
+							&& get_hwnd_wchar(GetDlgItem(hwnd,IDC_EDIT_DESC),&desc))
+						{
+							if(IDC_EDIT==code){
+								set_entry_text(hlist,lv_item_index,user,pwd,desc);
+								update_pwd_entry(&g_pwd_list,lparam_val,user,pwd,desc);
+							}else{
+								if(is_valid_entry(user,pwd,desc)){
+									int res;
+									res=add_pwd_entry(&g_pwd_list,user,pwd,desc);
+									if(res)
+										add_entry_text(hlist,g_pwd_list.count-1,user,pwd,desc);
+								}
+							}
+						}
+						free(user);
+						free(pwd);
+						free(desc);
+						auto_set_list_width(hlist);
+					}
+					break;
+				}
+				EndDialog(hwnd,id);
+				break;
+			case IDCANCEL:
+				EndDialog(hwnd,id);
+				break;
+			}
+		}
+		break;
+	}
+	return FALSE;
+}
+int filter_list(HWND hlist,WCHAR *str)
 {
 	WCHAR **word_list=0;
 	int i,word_count=0;
-	split_words(str,&word_list,&word_count);
-	for(i=0;i<word_count;i++){
-		
+	PWD_LIST tmp_list={0};
+	if(0==wcslen(str)){
+		populate_listview(hlist,&g_pwd_list);
+		return TRUE;
 	}
+	split_words(str,&word_list,&word_count);
+	for(i=0;i<g_pwd_list.count;i++){
+		PWD_ENTRY *entry=&g_pwd_list.list[i];
+		add_pwd_entry(&tmp_list,entry->user,entry->pwd,entry->desc);
+	}
+	{
+		int j;
+		for(j=0;j<tmp_list.count;j++){
+			int i;
+			int match_count=0;
+			PWD_ENTRY *entry=&tmp_list.list[j];
+			WCHAR *desc=wcsdup(entry->desc);
+			wcslwr(desc);
+			for(i=0;i<word_count;i++){
+				const WCHAR *token=word_list[i];
+				WCHAR *ptr;
+				ptr=wcsstr(desc,token);
+				if(ptr){
+					match_count++;
+				}
+			}
+			if(match_count!=word_count){
+				free(entry->desc);
+				free(entry->pwd);
+				free(entry->user);
+				entry->desc=0;
+				entry->pwd=0;
+				entry->user=0;
+			}
+			
+		}
+	}
+	populate_listview(hlist,&tmp_list);
+	free_pwd_list(&tmp_list);
+	free_split_words(&word_list,&word_count);
 	return TRUE;
 }
-
 
 BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 {
@@ -847,6 +987,11 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 			load_pwd_list(&g_first_pwd_list);
 			hlist=GetDlgItem(hwnd,IDC_LISTVIEW);
 			populate_listview(hlist,&g_pwd_list);
+			{
+				int list[1]={IDC_FILTER_DESC};
+				setup_edit_controls(hwnd,list,1);
+			}
+
 		}
 		break;
 	case WM_SIZE:
@@ -886,6 +1031,14 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 								populate_listview(hdr->hwndFrom,&g_pwd_list);
 								PostMessage(hwnd,WM_COMMAND,MAKEWPARAM(IDC_FILTER_DESC,0),0);
 								break;
+							case VK_F3:
+								SetFocus(GetDlgItem(hwnd,IDC_FILTER_DESC));
+								break;
+							case 'V':
+								if(GetKeyState(VK_CONTROL)&0x8000){
+									PostMessage(hwnd,WM_COMMAND,MAKEWPARAM(IDC_PASTE,0),0);
+								}
+								break;
 							}
 						}
 						break;
@@ -913,6 +1066,7 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 			switch(id){
 			case IDC_LISTVIEW:
 				break;
+			case IDC_PASTE:
 			case IDC_EDIT:
 			case IDC_ADD:
 				{
@@ -930,7 +1084,17 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 						if(lv_param>=0){
 							int r=del_pwd_entry(&g_pwd_list,lv_param);
 							if(r){
-								ListView_DeleteItem(hlist,index);
+								int count;
+								populate_listview(hlist,&g_pwd_list);
+								SetDlgItemText(hwnd,IDC_FILTER_DESC,L"");
+								count=ListView_GetItemCount(hlist);
+								if(count){
+									int state=LVIS_FOCUSED|LVIS_SELECTED;
+									if(index>=count)
+										index--;
+									ListView_SetItemState(hlist,index,state,state);
+								}
+
 							}
 						}
 					}
@@ -962,7 +1126,7 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 						WCHAR tmp[80]={0};
 						HWND hlist=GetDlgItem(hwnd,IDC_LISTVIEW);
 						GetDlgItemText(hwnd,id,tmp,_countof(tmp));
-						filter_list(hlist,2,tmp);
+						filter_list(hlist,tmp);
 					}
 				}
 				break;
