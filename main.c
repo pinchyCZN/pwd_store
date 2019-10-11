@@ -1152,6 +1152,18 @@ void quit_dialog(HWND hwnd)
 	save_position(hwnd);
 	PostQuitMessage(0);
 }
+int load_icon(HWND hwnd)
+{
+	static HICON hIcon=0;
+	if(0==hIcon)
+		hIcon=LoadIcon(ghinstance,MAKEINTRESOURCE(IDI_ICON));
+    if(hIcon){
+		SendMessage(hwnd,WM_SETICON,ICON_SMALL,(LPARAM)hIcon);
+		SendMessage(hwnd,WM_SETICON,ICON_BIG,(LPARAM)hIcon);
+		return TRUE;
+	}
+	return FALSE;
+}
 
 BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 {
@@ -1173,6 +1185,7 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 			hlist=GetDlgItem(hwnd,IDC_LISTVIEW);
 			populate_listview(hlist,&g_pwd_list);
 			restore_position(hwnd);
+			load_icon(hwnd);
 			{
 				int list[1]={IDC_FILTER_DESC};
 				setup_edit_controls(hwnd,list,1);
