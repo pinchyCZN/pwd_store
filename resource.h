@@ -15,8 +15,8 @@
 #define IDC_EDIT_USER                   1010
 #define IDC_EDIT_PWD                    1011
 #define IDC_EDIT_DESC                   1012
-#define IDC_SAVE_EXIT                   1013
 #define IDC_PASTE                       1014
+#define IDC_SAVE                        1016
 
 // Next default values for new objects
 // 
@@ -24,7 +24,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        105
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1015
+#define _APS_NEXT_CONTROL_VALUE         1017
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

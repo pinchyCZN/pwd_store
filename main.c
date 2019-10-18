@@ -24,7 +24,8 @@ struct CONTROL_ANCHOR anchor_main_dlg[]={
 	{IDC_EDIT,ANCHOR_LEFT|ANCHOR_BOTTOM,0,0,0},
 	{IDC_DELETE,ANCHOR_LEFT|ANCHOR_BOTTOM,0,0,0},
 	{IDC_GRIPPY,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
-	{IDC_SAVE_EXIT,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
+	{IDC_SAVE,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
+	{IDCANCEL,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
 };
 
 WCHAR *col_names[]={
@@ -1164,6 +1165,14 @@ int load_icon(HWND hwnd)
 	}
 	return FALSE;
 }
+void clear_all_item_state(HWND hlist)
+{
+	int i,count;
+	count=ListView_GetItemCount(hlist);
+	for(i=0;i<count;i++){
+		ListView_SetItemState(hlist,i,0,LVIS_SELECTED|LVIS_FOCUSED);
+	}
+}
 
 BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 {
@@ -1190,6 +1199,10 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 				int list[1]={IDC_FILTER_DESC};
 				setup_edit_controls(hwnd,list,1);
 			}
+			{
+				ListView_SetItemState(hlist,0,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);
+				SetFocus(hlist);
+			}
 		}
 		break;
 	case WM_SIZE:
@@ -1211,6 +1224,9 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 			switch(id){
 			case IDC_LISTVIEW:
 				{
+					int redraw=FALSE;
+					int focused_index=-1;
+					HWND hlist=hdr->hwndFrom;
 					switch(hdr->code){
 					case LVN_KEYDOWN:
 						{
@@ -1219,6 +1235,7 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 							case VK_INSERT:
 								PostMessage(hwnd,WM_COMMAND,MAKEWPARAM(IDC_ADD,0),0);
 								break;
+							case VK_RETURN:
 							case VK_F2:
 								PostMessage(hwnd,WM_COMMAND,MAKEWPARAM(IDC_EDIT,0),0);
 								break;
@@ -1227,10 +1244,7 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 								break;
 							case VK_F5:
 								populate_listview(hdr->hwndFrom,&g_pwd_list);
-								PostMessage(hwnd,WM_COMMAND,MAKEWPARAM(IDC_FILTER_DESC,0),0);
-								break;
-							case VK_F3:
-								SetFocus(GetDlgItem(hwnd,IDC_FILTER_DESC));
+								PostMessage(hwnd,WM_COMMAND,MAKEWPARAM(IDC_FILTER_DESC,EN_CHANGE),0);
 								break;
 							case 'V':
 								if(GetKeyState(VK_CONTROL)&0x8000){
@@ -1239,7 +1253,6 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 								break;
 							case 'C':
 								if(GetKeyState(VK_CONTROL)&0x8000){
-									HWND hlist=hdr->hwndFrom;
 									int index=get_focused_item(hlist);
 									if(index>=0){
 										WCHAR tmp[512]={0};
@@ -1252,11 +1265,13 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 								selected_column--;
 								if(selected_column<0)
 									selected_column=0;
+								redraw=TRUE;
 								break;
 							case VK_RIGHT:
 								selected_column++;
 								if(selected_column>2)
 									selected_column=2;
+								redraw=TRUE;
 								break;
 							}
 						}
@@ -1265,7 +1280,6 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 					case NM_CLICK:
 						{
 							LV_HITTESTINFO lvhit={0};
-							HWND hlist=hdr->hwndFrom;
 							GetCursorPos(&lvhit.pt);
 							ScreenToClient(hlist,&lvhit.pt);
 							ListView_SubItemHitTest(hlist,&lvhit);
@@ -1273,8 +1287,8 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 								int index=lvhit.iSubItem;
 								if(index>=0 && index<=2){
 									selected_column=index;
-									ListView_RedrawItems(hlist,lvhit.iItem,lvhit.iItem);
-									UpdateWindow(hlist);
+									focused_index=lvhit.iItem;
+									redraw=TRUE;
 								}
 							}
 						}
@@ -1282,7 +1296,6 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 					case NM_DBLCLK:
 						{
 							int index;
-							HWND hlist=GetDlgItem(hwnd,IDC_LISTVIEW);
 							index=get_focused_item(hlist);
 							if(index>=0){
 								PostMessage(hwnd,WM_COMMAND,MAKEWPARAM(IDC_EDIT,0),0);
@@ -1290,7 +1303,17 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 						}
 						break;
 					}
-
+					if(redraw){
+						if(focused_index<0)
+							focused_index=get_focused_item(hlist);
+						if(focused_index<0){
+							focused_index=0;
+							ListView_SetItemState(hlist,0,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);
+						}
+						if(focused_index>=0)
+							ListView_RedrawItems(hlist,focused_index,focused_index);
+						UpdateWindow(hlist);
+					}
 				}
 				break;
 			}
@@ -1303,6 +1326,58 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 				draw_item(di,selected_column);
 				return TRUE;
 			}
+		}
+		break;
+	case WM_APP:
+		{
+			int code=lparam;
+			HWND hlist=GetDlgItem(hwnd,IDC_LISTVIEW);
+			int index=get_focused_item(hlist);
+			int copy_text=FALSE;
+			if(index<0){
+				ListView_SetItemState(hlist,0,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);
+				index=0;
+			}
+			switch(code){
+			case 1:
+				selected_column=0;
+				copy_text=TRUE;
+				break;
+			case 2:
+				selected_column=1;
+				copy_text=TRUE;
+				break;
+			case 3:
+				selected_column=2;
+				copy_text=TRUE;
+				break;
+			}
+			ListView_RedrawItems(hlist,index,index);
+			UpdateWindow(hlist);
+			if(copy_text){
+				WCHAR tmp[512]={0};
+				ListView_GetItemText(hlist,index,selected_column,tmp,_countof(tmp));
+				copy_to_clip(tmp);
+			}
+		}
+		break;
+	case WM_HELP:
+		{
+			static int showing=FALSE;
+			const WCHAR *text=  L"ctrl+1 = copy 1st col\2\n"
+								L"ctrl+2 = copy 2nd col\r\n"
+								L"ctrl+3 = copy 3rd col\r\n"
+								L"ctrl+E = set focus on edit\r\n"
+								L"ctrl+L = set focus on list\r\n"
+								L"ctrl+S = save list\r\n"
+								L"F2 = edit entry\r\n"
+								L"F5 = refresh\r\n"
+								L"ctrl+move = navigate in edit control\r\n";
+			if(showing)
+				break;
+			showing=TRUE;
+			MessageBox(hwnd,text,L"HELP",MB_OK);
+			showing=FALSE;
 		}
 		break;
 	case WM_COMMAND:
@@ -1338,9 +1413,9 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 									int state=LVIS_FOCUSED|LVIS_SELECTED;
 									if(index>=count)
 										index--;
+									clear_all_item_state(hlist);
 									ListView_SetItemState(hlist,index,state,state);
 								}
-
 							}
 						}
 					}
@@ -1362,18 +1437,34 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 					quit_dialog(hwnd);
 				}
 				break;
-			case IDC_SAVE_EXIT:
-				save_pwd_list(&g_pwd_list);
-				quit_dialog(hwnd);
+			case IDC_SAVE:
+				{
+					int val;
+					val=compare_pwdlist(&g_first_pwd_list,&g_pwd_list);
+					if(0==val){
+						MessageBoxA(hwnd,"Nothing has changed!","NO CHANGE",MB_OK|MB_SYSTEMMODAL);
+						break;
+					}
+					save_pwd_list(&g_pwd_list);
+				}
 				break;
 			case IDC_FILTER_DESC:
 				{
 					if(EN_CHANGE==code){
 						WCHAR tmp[80]={0};
+						int index,count;
+						int state=LVIS_FOCUSED|LVIS_SELECTED;
 						HWND hlist=GetDlgItem(hwnd,IDC_LISTVIEW);
+						index=get_focused_item(hlist);
 						GetDlgItemText(hwnd,id,tmp,_countof(tmp));
 						wcslwr(tmp);
 						filter_list(hlist,tmp);
+						count=ListView_GetItemCount(hlist);
+						if(index<0 || index>=count){
+							ListView_SetItemState(hlist,0,state,state);
+						}else{
+							ListView_SetItemState(hlist,index,state,state);
+						}
 					}
 				}
 				break;
@@ -1403,7 +1494,73 @@ int WINAPI WinMain(HINSTANCE hinstance,HINSTANCE hprev,LPSTR lpCmdLine,int nCmdS
 		if(0==res || -1==res){
 			break;
 		}
-
+		if(WM_KEYDOWN==msg.message){
+			int wparam=msg.wParam;
+			int ctrl=GetKeyState(VK_CONTROL)&0x8000;
+			if(ctrl){
+				if('1'==wparam || '2'==wparam || '3'==wparam){
+					msg.hwnd=ghdlg;
+					msg.message=WM_APP;
+					msg.lParam=wparam-'1'+1;
+				}else if('E'==wparam || 'L'==wparam || 'S'==wparam){
+					HWND htarget=0;
+					switch(wparam){
+					case 'E':
+						htarget=GetDlgItem(ghdlg,IDC_FILTER_DESC);
+						break;
+					case 'L':
+						htarget=GetDlgItem(ghdlg,IDC_LISTVIEW);
+						break;
+					case 'S':
+						PostMessage(ghdlg,WM_COMMAND,MAKEWPARAM(IDC_SAVE,0),0);
+						break;
+					}
+					if(htarget){
+						SetFocus(htarget);
+						continue;
+					}
+				}else{
+					HWND hedit=GetDlgItem(ghdlg,IDC_FILTER_DESC);
+					if(hedit==msg.hwnd){
+						switch(wparam){
+						case 'C':
+						case VK_UP:
+						case VK_DOWN:
+						case VK_LEFT:
+						case VK_RIGHT:
+						case VK_PRIOR:
+						case VK_NEXT:
+						case VK_HOME:
+						case VK_END:
+							{
+								HWND hlist=GetDlgItem(ghdlg,IDC_LISTVIEW);
+								msg.hwnd=hlist;
+								PostMessage(ghdlg,WM_APP,-1,-1);
+							}
+							break;
+						}
+					}
+				}
+			}else{
+				int lparam=msg.lParam;
+				if(0==(lparam&(1<<24))){
+					int key=MapVirtualKey(wparam,2);
+					if( (key>=' ' && key<=0x7E)
+						|| (VK_SPACE==wparam)
+						|| (VK_BACK==wparam)){
+						HWND hlist;
+						hlist=GetDlgItem(ghdlg,IDC_LISTVIEW);
+						if(msg.hwnd==hlist){
+							msg.hwnd=GetDlgItem(ghdlg,IDC_FILTER_DESC);
+						}
+					}else{
+						if(VK_RETURN==wparam){
+							msg.wParam=VK_F2;
+						}
+					}
+				}
+			}
+		}
 		if(!IsDialogMessage(hwnd,&msg)){
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
