@@ -1446,6 +1446,8 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 						break;
 					}
 					save_pwd_list(&g_pwd_list);
+					load_pwd_list(&g_pwd_list);
+					load_pwd_list(&g_first_pwd_list);
 				}
 				break;
 			case IDC_FILTER_DESC:
