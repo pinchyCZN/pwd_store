@@ -23,6 +23,7 @@ struct CONTROL_ANCHOR anchor_main_dlg[]={
 	{IDC_ADD,ANCHOR_LEFT|ANCHOR_BOTTOM,0,0,0},
 	{IDC_EDIT,ANCHOR_LEFT|ANCHOR_BOTTOM,0,0,0},
 	{IDC_DELETE,ANCHOR_LEFT|ANCHOR_BOTTOM,0,0,0},
+	{IDC_ON_TOP,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
 	{IDC_GRIPPY,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
 	{IDC_SAVE,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
 	{IDCANCEL,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
@@ -1421,6 +1422,9 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 					}
 				}
 				break;
+			case IDC_ON_TOP:
+				SetWindowPos(hwnd,IsDlgButtonChecked(hwnd,LOWORD(wparam))?HWND_TOPMOST:HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE);
+				break;
 			case IDOK:
 				break;
 			case IDCANCEL:
@@ -1560,6 +1564,17 @@ int WINAPI WinMain(HINSTANCE hinstance,HINSTANCE hprev,LPSTR lpCmdLine,int nCmdS
 							msg.wParam=VK_F2;
 						}
 					}
+				}
+			}
+		}else if(WM_SYSKEYDOWN==msg.message){
+			int lparam=msg.lParam;
+			if(lparam&(1<<29)){
+				if(VK_HOME==msg.wParam){
+					HWND htmp=GetFocus();
+					SendDlgItemMessage(ghdlg,IDC_ON_TOP,BM_CLICK,IDC_ON_TOP,0);
+					if(htmp)
+						SetFocus(htmp);
+					continue;
 				}
 			}
 		}
