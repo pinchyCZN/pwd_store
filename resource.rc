@@ -40,10 +40,11 @@ BEGIN
     PUSHBUTTON      "Add",IDC_ADD,0,277,50,14
     PUSHBUTTON      "Edit",IDC_EDIT,60,277,50,14
     PUSHBUTTON      "Delete",IDC_DELETE,130,277,50,14
-    PUSHBUTTON      "PASTE",IDC_PASTE,209,276,50,14,NOT WS_VISIBLE
+    PUSHBUTTON      "PASTE",IDC_PASTE,194,276,50,14,NOT WS_VISIBLE
     PUSHBUTTON      "Save",IDC_SAVE,311,277,50,14
     PUSHBUTTON      "EXIT",IDCANCEL,372,277,50,14
     SCROLLBAR       IDC_GRIPPY,427,273,20,22,SBS_VERT
+    PUSHBUTTON      "pwd gen",IDC_PWD_GEN,245,277,50,14
 END
 
 IDD_ENTRY DIALOG DISCARDABLE  0, 0, 217, 97
@@ -55,11 +56,41 @@ BEGIN
     DEFPUSHBUTTON   "OK",IDOK,0,83,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,167,83,50,14
     LTEXT           "User",IDC_STATIC,0,0,16,8
-    LTEXT           "Password",IDC_STATIC,0,29,32,8
     LTEXT           "Description",IDC_STATIC,0,58,43,8
     EDITTEXT        IDC_EDIT_USER,43,0,165,17,ES_AUTOHSCROLL
     EDITTEXT        IDC_EDIT_PWD,43,29,165,17,ES_AUTOHSCROLL
     EDITTEXT        IDC_EDIT_DESC,43,58,165,17,ES_AUTOHSCROLL
+    PUSHBUTTON      "Password",IDC_PWD_BTN,0,29,43,14
+END
+
+IDD_MAINDLG DIALOG DISCARDABLE  0, 0, 319, 134
+STYLE WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+CAPTION "PW GEN"
+FONT 8, "MS Sans Serif"
+BEGIN
+    EDITTEXT        IDC_OUTPUT,0,0,318,19,ES_AUTOHSCROLL | ES_NOHIDESEL
+    CONTROL         "symbols",IDC_SYMBOLS,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,26,25,41,10
+    CONTROL         "numbers",IDC_NUMBERS,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,26,39,43,10
+    CONTROL         "upper case",IDC_UPPERCASE,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,26,53,51,10
+    CONTROL         "lower case",IDC_LOWERCASE,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,26,67,50,10
+    CONTROL         "exclude similar (il1Lo0O|)",IDC_EXCLUDE_SIM,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,26,81,93,10
+    CONTROL         "exclude ambigous ({}[]()/\\'""`~,;:.<>)",
+                    IDC_EXCLUDE_AMB,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,26,
+                    95,133,10
+    LTEXT           "length:",IDC_STATIC,159,25,22,8
+    COMBOBOX        IDC_LENGTH,187,23,59,195,CBS_DROPDOWN | WS_VSCROLL | 
+                    WS_TABSTOP
+    DEFPUSHBUTTON   "GENERATE",IDOK,153,54,50,14
+    PUSHBUTTON      "copy to clipboard",IDC_COPY,153,114,93,20
+    CONTROL         "always on top",IDC_ONTOP,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,0,124,59,10
+    CONTROL         "letter num sym",IDC_EASY,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,92,25,61,10
 END
 
 
@@ -108,6 +139,14 @@ BEGIN
         VERTGUIDE, 208
         HORZGUIDE, 29
         HORZGUIDE, 58
+    END
+
+    IDD_MAINDLG, DIALOG
+    BEGIN
+        VERTGUIDE, 26
+        VERTGUIDE, 153
+        HORZGUIDE, 25
+        HORZGUIDE, 114
     END
 END
 #endif    // APSTUDIO_INVOKED

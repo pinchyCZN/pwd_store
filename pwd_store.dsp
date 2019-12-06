@@ -96,6 +96,10 @@ SOURCE=.\anchor_system.c
 
 SOURCE=.\main.c
 # End Source File
+# Begin Source File
+
+SOURCE=.\pw_gen.c
+# End Source File
 # End Group
 # Begin Group "Header Files"
 
