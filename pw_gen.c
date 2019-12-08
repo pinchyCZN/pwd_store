@@ -20,7 +20,16 @@ HCRYPTPROV g_hcrypto=0;
 
 int setup_crypto()
 {
-	return CryptAcquireContext(&g_hcrypto,NULL,NULL,PROV_RSA_FULL,0);
+	int res;
+	res=CryptAcquireContext(&g_hcrypto,NULL,NULL,PROV_RSA_FULL,0);
+	if(!res){
+		int err;
+		err=GetLastError();
+		if(NTE_BAD_KEYSET==err){
+			res=CryptAcquireContext(&g_hcrypto,NULL,NULL,PROV_RSA_FULL,CRYPT_NEWKEYSET);
+		}
+	}
+	return res;
 }
 int my_rand()
 {
