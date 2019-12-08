@@ -4,6 +4,7 @@
 //
 #define IDD_DIALOG                      101
 #define IDD_ENTRY                       102
+#define IDD_MAINDLG                     103
 #define IDI_ICON                        104
 #define IDC_LISTVIEW                    1000
 #define IDC_FILTER_DESC                 1002
@@ -18,14 +19,27 @@
 #define IDC_PASTE                       1014
 #define IDC_SAVE                        1016
 #define IDC_ON_TOP                      1017
+#define IDC_PWD_GEN                     1018
+#define IDC_SYMBOLS                     1019
+#define IDC_PWD_BTN                     1019
+#define IDC_NUMBERS                     1020
+#define IDC_UPPERCASE                   1021
+#define IDC_LOWERCASE                   1022
+#define IDC_EXCLUDE_SIM                 1023
+#define IDC_EXCLUDE_AMB                 1024
+#define IDC_OUTPUT                      1025
+#define IDC_COPY                        1026
+#define IDC_LENGTH                      1027
+#define IDC_ONTOP                       1028
+#define IDC_EASY                        1029
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        105
+#define _APS_NEXT_RESOURCE_VALUE        106
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1018
+#define _APS_NEXT_CONTROL_VALUE         1020
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

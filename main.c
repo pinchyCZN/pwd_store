@@ -13,6 +13,8 @@
 #include "anchor_system.h"
 #define _countof(x) sizeof(x)/sizeof(x[0])
 
+int show_pwd_dlg(HWND hwnd,HWND hedit,HINSTANCE hinstance);
+
 HINSTANCE ghinstance=0;
 HWND ghdlg=0;
 
@@ -26,6 +28,7 @@ struct CONTROL_ANCHOR anchor_main_dlg[]={
 	{IDC_ON_TOP,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
 	{IDC_GRIPPY,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
 	{IDC_SAVE,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
+	{IDC_PWD_GEN,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
 	{IDCANCEL,ANCHOR_RIGHT|ANCHOR_BOTTOM,0,0,0},
 };
 
@@ -955,6 +958,9 @@ BOOL CALLBACK entry_dlg(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 			case IDCANCEL:
 				EndDialog(hwnd,id);
 				break;
+			case IDC_PWD_BTN:
+				show_pwd_dlg(hwnd,GetDlgItem(hwnd,IDC_EDIT_PWD),ghinstance);
+				break;
 			}
 		}
 		break;
@@ -1365,6 +1371,8 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 	case WM_HELP:
 		{
 			static int showing=FALSE;
+			WCHAR *tmp;
+			int tmp_len=0x10000;
 			const WCHAR *text=  L"ctrl+1 = copy 1st col\2\n"
 								L"ctrl+2 = copy 2nd col\r\n"
 								L"ctrl+3 = copy 3rd col\r\n"
@@ -1378,7 +1386,16 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 			if(showing)
 				break;
 			showing=TRUE;
-			MessageBox(hwnd,text,L"HELP",MB_OK);
+			tmp=calloc(tmp_len,sizeof(WCHAR));
+			if(tmp){
+				const WCHAR *fname=get_ini_fname();
+				int len=tmp_len/sizeof(WCHAR);
+				_snwprintf(tmp,len,L"%s\r\n%s",text,fname);
+				MessageBox(hwnd,tmp,L"HELP",MB_OK);
+				free(tmp);
+			}else{
+				MessageBox(hwnd,text,L"HELP",MB_OK);
+			}
 			showing=FALSE;
 		}
 		break;
@@ -1432,6 +1449,9 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 				break;
 			case IDC_ON_TOP:
 				SetWindowPos(hwnd,IsDlgButtonChecked(hwnd,LOWORD(wparam))?HWND_TOPMOST:HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE);
+				break;
+			case IDC_PWD_GEN:
+				show_pwd_dlg(hwnd,0,ghinstance);
 				break;
 			case IDOK:
 				break;
