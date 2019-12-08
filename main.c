@@ -13,7 +13,7 @@
 #include "anchor_system.h"
 #define _countof(x) sizeof(x)/sizeof(x[0])
 
-int show_pwd_dlg(HWND hwnd,HWND hedit,HINSTANCE hinstance);
+int show_pwd_dlg(HWND,HWND,HINSTANCE);
 
 HINSTANCE ghinstance=0;
 HWND ghdlg=0;
@@ -1451,7 +1451,7 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 				SetWindowPos(hwnd,IsDlgButtonChecked(hwnd,LOWORD(wparam))?HWND_TOPMOST:HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE);
 				break;
 			case IDC_PWD_GEN:
-				show_pwd_dlg(hwnd,0,ghinstance);
+				show_pwd_dlg(hwnd,hwnd,ghinstance);
 				break;
 			case IDOK:
 				break;
