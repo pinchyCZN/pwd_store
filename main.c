@@ -849,6 +849,224 @@ int populate_entry_dlg(HWND hdlg,WCHAR *str)
 	return result;
 }
 
+void add_user_cache(WCHAR *user)
+{
+	const WCHAR *section=L"USER_CACHE";
+	const WCHAR *count_key=L"COUNT";
+	int i,count=0;
+	int update_count=FALSE;
+	int target=-1;
+	get_ini_val(section,count_key,&count);
+	for(i=0;i<count;i++){
+		WCHAR *entry=0;
+		WCHAR key[80]={0};
+		int found=FALSE;
+		_snwprintf(key,_countof(key),L"ENTRY%i",i);
+		get_ini_str(section,key,&entry);
+		if(entry){
+			if(0==entry[0] && target<0){
+				target=i;
+			}else if(0==wcscmp(entry,user)){
+				target=i;
+				found=TRUE;
+			}
+			free(entry);
+		}else if(target<0){
+			target=i;
+		}
+		if(found){
+			break;
+		}
+	}
+	if(target<0){
+		target=count;
+		count++;
+		update_count=TRUE;
+	}
+	if(target>0){
+		WCHAR *tmp=0;
+		WCHAR key[80]={0};
+		const WCHAR *entry0=L"ENTRY0";
+		_snwprintf(key,_countof(key),L"ENTRY%i",target);
+		get_ini_str(section,entry0,&tmp);
+		if(tmp){
+			set_ini_str(section,key,tmp);
+		}else{
+			set_ini_str(section,key,L"");
+		}
+		set_ini_str(section,entry0,user);
+		free(tmp);
+	}else{
+		set_ini_str(section,L"ENTRY0",user);
+	}
+	if(update_count)
+		set_ini_val(section,count_key,count);
+
+}
+
+void delete_user_cache(WCHAR *user)
+{
+	const WCHAR *section=L"USER_CACHE";
+	const WCHAR *count_key=L"COUNT";
+	int i,count=0;
+	get_ini_val(section,count_key,&count);
+	for(i=0;i<count;i++){
+		WCHAR *entry=0;
+		WCHAR key[80]={0};
+		_snwprintf(key,_countof(key),L"ENTRY%i",i);
+		get_ini_str(section,key,&entry);
+		if(entry){
+			if(0==wcscmp(entry,user)){
+				set_ini_str(section,key,L"");
+				if(i==(count-1)){
+					set_ini_val(section,count_key,count-1);
+				}
+			}
+			free(entry);
+		}
+	}
+
+}
+
+BOOL CALLBACK user_select_dlg(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
+{
+	static HWND hedit=0;
+	const WCHAR *section=L"USER_CACHE";
+	switch(msg){
+	case WM_INITDIALOG:
+		hedit=(HWND)lparam;
+		if(hedit){
+			RECT rect={0};
+			GetWindowRect(hedit,&rect);
+			SetWindowPos(hwnd,NULL,rect.left,rect.bottom,0,0,SWP_NOZORDER|SWP_NOSIZE);
+		}
+		{
+			int i,count=0;
+			HWND huser=GetDlgItem(hwnd,IDC_USER_HOTLIST);
+			get_ini_val(section,L"COUNT",&count);
+			for(i=0;i<count;i++){
+				WCHAR key[80]={0};
+				WCHAR *user=0;
+				_snwprintf(key,_countof(key),L"ENTRY%i",i);
+				get_ini_str(section,key,&user);
+				if(user){
+					if(user[0]){
+						SendMessage(huser,LB_ADDSTRING,0,(LPARAM)user);
+					}
+					free(user);
+				}
+			}
+			SendMessage(huser,LB_SETCURSEL,0,0);
+			huser=GetDlgItem(hwnd,IDC_USER_ALL);
+			count=g_pwd_list.count;
+			for(i=0;i<count;i++){
+				PWD_ENTRY *entry=&g_pwd_list.list[i];
+				if(entry->user && entry->user[0]){
+					SendMessage(huser,LB_ADDSTRING,0,(LPARAM)entry->user);
+				}
+			}
+		}
+		break;
+	case WM_COMMAND:
+		{
+			int id=LOWORD(wparam);
+			{
+				char tmp[80]={0};
+				_snprintf(tmp,sizeof(tmp),"ID=%i code=%i\n",LOWORD(wparam),HIWORD(wparam));
+				OutputDebugStringA(tmp);
+			}
+			switch(id){
+			case IDC_ADD:
+				{
+					HWND hlist=GetDlgItem(hwnd,IDC_USER_ALL);
+					HWND hhot=GetDlgItem(hwnd,IDC_USER_HOTLIST);
+					int index=SendMessage(hlist,LB_GETCURSEL,0,0);
+					if(index>=0){
+						int len=SendMessage(hlist,LB_GETTEXTLEN,index,0);
+						if(len>0){
+							WCHAR *tmp=calloc((len+1)*sizeof(WCHAR),1);
+							if(tmp){
+								SendMessage(hlist,LB_GETTEXT,index,(LPARAM)tmp);
+								index=SendMessage(hhot,LB_FINDSTRINGEXACT,-1,(LPARAM)tmp);
+								if(index<0)
+									index=SendMessage(hhot,LB_ADDSTRING,0,(LPARAM)tmp);
+								if(index>=0)
+									SendMessage(hhot,LB_SETCURSEL,index,0);
+								add_user_cache(tmp);
+								free(tmp);
+							}
+						}
+					}
+				}
+				break;
+			case IDC_DELETE:
+				{
+					HWND hhot=GetDlgItem(hwnd,IDC_USER_HOTLIST);
+					if(hhot){
+						int index=SendMessage(hhot,LB_GETCURSEL,0,0);
+						if(index>=0){
+							WCHAR tmp[80]={0};
+							SendMessage(hhot,LB_GETTEXT,index,(LPARAM)tmp);
+							delete_user_cache(tmp);
+							SendMessage(hhot,LB_DELETESTRING,index,0);
+						}
+						SendMessage(hhot,LB_SETCURSEL,0,0);
+					}
+				}
+				break;
+			case IDC_USER_HOTLIST:
+			case IDC_USER_ALL:
+				{
+					int code=HIWORD(wparam);
+					int is_dbl_click=(LBN_DBLCLK==code);
+					if(is_dbl_click){
+						HWND hlist=(HWND)lparam;
+						int index=SendMessage(hlist,LB_GETCURSEL,0,0);
+						if(index>=0){
+							int len=SendMessage(hlist,LB_GETTEXTLEN,index,0);
+							if(len>0){
+								WCHAR *tmp=calloc((len+1)*sizeof(WCHAR),1);
+								if(tmp){
+									SendMessage(hlist,LB_GETTEXT,index,(LPARAM)tmp);
+									if(hedit){
+										SetWindowText(hedit,tmp);
+										add_user_cache(tmp);
+
+									}
+									free(tmp);
+									EndDialog(hwnd,0);
+								}
+							}
+						}
+					}
+				}
+				break;
+			case IDCANCEL:
+				EndDialog(hwnd,0);
+				break;
+			case IDOK:
+				if(hedit)
+				{
+					WCHAR tmp[80]={0};
+					HWND huser=GetDlgItem(hwnd,IDC_USER_HOTLIST);
+					int index=SendMessage(huser,LB_GETCURSEL,0,0);
+					if(index>=0){
+						SendMessage(huser,LB_GETTEXT,index,(LPARAM)tmp);
+						if(tmp[0]){
+							add_user_cache(tmp);
+							SetWindowText(hedit,tmp);
+						}
+					}
+				}
+				EndDialog(hwnd,0);
+				break;
+			}
+		}
+		break;
+	}
+	return FALSE;
+}
+
 BOOL CALLBACK entry_dlg(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 {
 	static int code=0;
@@ -960,6 +1178,9 @@ BOOL CALLBACK entry_dlg(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 				break;
 			case IDC_PWD_BTN:
 				show_pwd_dlg(hwnd,GetDlgItem(hwnd,IDC_EDIT_PWD),ghinstance);
+				break;
+			case IDC_USER_BTN:
+				DialogBoxParam(ghinstance,MAKEINTRESOURCE(IDD_USER_DLG),hwnd,user_select_dlg,(LPARAM)GetDlgItem(hwnd,IDC_EDIT_USER));
 				break;
 			}
 		}
