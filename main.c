@@ -13,7 +13,7 @@
 #include "anchor_system.h"
 #define _countof(x) sizeof(x)/sizeof(x[0])
 
-int show_pwd_dlg(HWND hwnd,HWND hedit,HINSTANCE hinstance);
+int show_pwd_dlg(HWND,HWND,HINSTANCE);
 
 HINSTANCE ghinstance=0;
 HWND ghdlg=0;
@@ -1602,6 +1602,7 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 								L"ctrl+S = save list\r\n"
 								L"F2 = edit entry\r\n"
 								L"F5 = refresh\r\n"
+								L"shift+delete = delete without prompt\r\n"
 								L"ctrl+move = navigate in edit control\r\n";
 			if(showing)
 				break;
@@ -1642,7 +1643,14 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 						int lv_param=-1;
 						get_entry_lparam(hlist,index,&lv_param);
 						if(lv_param>=0){
-							int r=del_pwd_entry(&g_pwd_list,lv_param);
+							int r;
+							r=GetKeyState(VK_SHIFT)&0x8000;
+							if(!r){
+								r=MessageBox(hwnd,L"Are you sure you want to delete the entry?",L"WARNING",MB_OKCANCEL|MB_SYSTEMMODAL);
+								if(IDOK!=r)
+									break;
+							}
+							r=del_pwd_entry(&g_pwd_list,lv_param);
 							if(r){
 								int count;
 								populate_listview(hlist,&g_pwd_list);
@@ -1664,7 +1672,7 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 				SetWindowPos(hwnd,IsDlgButtonChecked(hwnd,LOWORD(wparam))?HWND_TOPMOST:HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE);
 				break;
 			case IDC_PWD_GEN:
-				show_pwd_dlg(hwnd,0,ghinstance);
+				show_pwd_dlg(hwnd,hwnd,ghinstance);
 				break;
 			case IDOK:
 				break;

@@ -20,7 +20,16 @@ HCRYPTPROV g_hcrypto=0;
 
 int setup_crypto()
 {
-	return CryptAcquireContext(&g_hcrypto,NULL,NULL,PROV_RSA_FULL,0);
+	int res;
+	res=CryptAcquireContext(&g_hcrypto,NULL,NULL,PROV_RSA_FULL,0);
+	if(!res){
+		int err;
+		err=GetLastError();
+		if(NTE_BAD_KEYSET==err){
+			res=CryptAcquireContext(&g_hcrypto,NULL,NULL,PROV_RSA_FULL,CRYPT_NEWKEYSET);
+		}
+	}
+	return res;
 }
 int my_rand()
 {
@@ -285,13 +294,40 @@ LRESULT CALLBACK edit_proc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 	return CallWindowProc(old_edit_proc,hwnd,msg,wparam,lparam); 
 }
 
+int is_edit_control(HWND hwnd)
+{
+	char name[40]={0};
+	if(0==hwnd)
+		return FALSE;
+	GetClassNameA(hwnd,name,sizeof(name));
+	strlwr(name);
+	if(strstr(name,"edit"))
+		return TRUE;
+	else
+		return FALSE;
+}
+
+void position_window_relative(HWND hdlg,HWND hwnd)
+{
+	RECT rect={0};
+	if(0==hwnd || 0==hdlg)
+		return;
+	if(GetWindowRect(hwnd,&rect)){
+		if(is_edit_control(hwnd)){
+			SetWindowPos(hdlg,0,rect.left,rect.bottom,0,0,SWP_NOZORDER|SWP_NOSIZE);
+		}else{
+			SetWindowPos(hdlg,0,rect.left,rect.top,0,0,SWP_NOZORDER|SWP_NOSIZE);
+		}
+	}
+}
+
 BOOL CALLBACK dlg_proc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 {
 	static HWND hgrippy;
-	static HWND hedit_target=0;
+	static HWND hrelative_target=0;
 	switch(msg){
 	case WM_INITDIALOG:
-		hedit_target=(HWND)lparam;
+		hrelative_target=(HWND)lparam;
 		init_combo(GetDlgItem(hwnd,IDC_LENGTH));
 		CheckDlgButton(hwnd,IDC_NUMBERS,BST_CHECKED);
 		CheckDlgButton(hwnd,IDC_UPPERCASE,BST_CHECKED);
@@ -302,11 +338,7 @@ BOOL CALLBACK dlg_proc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 		old_edit_proc=(WNDPROC)SetWindowLong(GetDlgItem(hwnd,IDC_OUTPUT),GWL_WNDPROC,(LONG)edit_proc);
 		hgrippy=create_grippy(hwnd);
 		center_window(hwnd);
-		if(hedit_target){
-			RECT rect={0};
-			if(GetWindowRect(hedit_target,&rect))
-				SetWindowPos(hwnd,0,rect.left,rect.bottom,0,0,SWP_NOZORDER|SWP_NOSIZE);
-		}
+		position_window_relative(hwnd,hrelative_target);
 		SetFocus(GetDlgItem(hwnd,IDOK));
 		break;
 	case WM_SIZING:
@@ -350,8 +382,8 @@ BOOL CALLBACK dlg_proc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 					params.easy_pw=is_checked(hwnd,IDC_EASY);
 					params.len=get_ctrl_int(GetDlgItem(hwnd,IDC_LENGTH));
 					gen_pw(tmp,sizeof(tmp),&params);
-					if(hedit_target){
-						SetWindowTextA(hedit_target,tmp);
+					if(is_edit_control(hrelative_target)){
+						SetWindowTextA(hrelative_target,tmp);
 					}
 					SetDlgItemText(hwnd,IDC_OUTPUT,tmp);
 
@@ -368,13 +400,13 @@ BOOL CALLBACK dlg_proc(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 	return FALSE;
 }
 
-int show_pwd_dlg(HWND hwnd,HWND hedit,HINSTANCE hinstance)
+int show_pwd_dlg(HWND hwnd,HWND hrelative,HINSTANCE hinstance)
 {
 	if(!setup_crypto()){
 		MessageBox(hwnd,"Unable to initialize crypto library!","ERROR",MB_OK);
 		return FALSE;
 	}
-	DialogBoxParam(hinstance,MAKEINTRESOURCE(IDD_MAINDLG),hwnd,dlg_proc,(LPARAM)hedit);
+	DialogBoxParam(hinstance,MAKEINTRESOURCE(IDD_MAINDLG),hwnd,dlg_proc,(LPARAM)hrelative);
 	if(g_hcrypto){
 		CryptReleaseContext(g_hcrypto,0);
 		g_hcrypto=0;
