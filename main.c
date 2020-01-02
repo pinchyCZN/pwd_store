@@ -962,7 +962,9 @@ BOOL CALLBACK user_select_dlg(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 			for(i=0;i<count;i++){
 				PWD_ENTRY *entry=&g_pwd_list.list[i];
 				if(entry->user && entry->user[0]){
-					SendMessage(huser,LB_ADDSTRING,0,(LPARAM)entry->user);
+					int index=SendMessage(huser,LB_FINDSTRINGEXACT,-1,(LPARAM)entry->user);
+					if(index<0)
+						SendMessage(huser,LB_ADDSTRING,0,(LPARAM)entry->user);
 				}
 			}
 		}
