@@ -1134,14 +1134,26 @@ BOOL CALLBACK entry_dlg(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 			case IDOK:
 				{
 					HWND hfocus;
-					char name[40]={0};
+					int id;
+					int id_move[]={
+						IDC_EDIT_USER,IDC_EDIT_PWD,
+						IDC_EDIT_PWD,IDC_EDIT_DESC,
+						IDC_EDIT_DESC,IDOK,
+					};
+					int i,count;
 					hfocus=GetFocus();
-					GetClassNameA(hfocus,name,sizeof(name));
-					strlwr(name);
-					if(strstr(name,"edit")){
-						int ext=GetKeyState(VK_CONTROL)&0x8000;
-						SendMessage(hwnd,WM_NEXTDLGCTL,ext,0);
-						return FALSE;
+					id=GetDlgCtrlID(hfocus);
+					count=sizeof(id_move)/sizeof(id_move[0]);
+					for(i=0;i<count;i+=2){
+						int id_src=id_move[i];
+						int id_dst=id_move[i+1];
+						if(id==id_src){
+							HWND htmp=GetDlgItem(hwnd,id_dst);
+							if(htmp){
+								SetFocus(htmp);
+								return 0;
+							}
+						}
 					}
 				}
 				switch(code){
