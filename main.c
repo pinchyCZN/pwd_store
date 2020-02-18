@@ -1744,11 +1744,34 @@ BOOL CALLBACK dlg_func(HWND hwnd,UINT msg,WPARAM wparam,LPARAM lparam)
 	return FALSE;
 }
 
+void check_prev_instance()
+{
+	int err;
+	HANDLE hmutex;
+	SetLastError(NO_ERROR);
+	hmutex=CreateMutexW(NULL,FALSE,L"__PWD_STORE_MUTEX__");
+	err=GetLastError();
+	if(ERROR_ALREADY_EXISTS==err){
+		HWND hwnd=FindWindowW(NULL,L"PWD STORE");
+		if(hwnd){
+			int sw=SW_SHOW;
+			if(IsZoomed(hwnd))
+				sw=SW_MAXIMIZE;
+			else if(IsIconic(hwnd))
+				sw=SW_RESTORE;
+			ShowWindow(hwnd,sw);
+			SetForegroundWindow(hwnd);
+			ExitProcess(0);
+		}
+	}
+}
+
 
 int WINAPI WinMain(HINSTANCE hinstance,HINSTANCE hprev,LPSTR lpCmdLine,int nCmdShow)
 {
 	HWND hwnd;
 	ghinstance=hinstance;
+	check_prev_instance();
 	hwnd=CreateDialog(ghinstance,MAKEINTRESOURCE(IDD_DIALOG),NULL,&dlg_func);
 	if(0==hwnd){
 		MessageBoxA(NULL,"Unable to create window","ERROR",MB_OK|MB_SYSTEMMODAL);
