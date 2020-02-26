@@ -38,6 +38,7 @@ WCHAR *col_names[]={
 #define SECTION_WINDOW L"WINDOW"
 #define KEY_XPOS L"XPOS"
 #define KEY_YPOS L"YPOS"
+#define KEY_ON_TOP L"ON_TOP"
 
 typedef struct{
 	WCHAR *user;
@@ -1351,6 +1352,8 @@ void restore_position(HWND hwnd)
 	RECT rect={0};
 	RECT app_rect={0};
 	int w,h;
+	int val=0;
+	HWND top=HWND_NOTOPMOST;
 	GetWindowRect(hwnd,&app_rect);
 	w=app_rect.right-app_rect.left;
 	h=app_rect.bottom-app_rect.top;
@@ -1371,6 +1374,11 @@ void restore_position(HWND hwnd)
 	}
 	get_ini_val(SECTION_WINDOW,KEY_XPOS,&x);
 	get_ini_val(SECTION_WINDOW,KEY_YPOS,&y);
+	get_ini_val(SECTION_WINDOW,KEY_ON_TOP,&val);
+	if(val){
+		top=HWND_TOPMOST;
+		CheckDlgButton(hwnd,IDC_ON_TOP,BST_CHECKED);
+	}
 	if(hdesk){
 		if((x+w)>rect.right)
 			x=rect.right-w;
@@ -1381,14 +1389,17 @@ void restore_position(HWND hwnd)
 		if(y<rect.top)
 			y=rect.top;
 	}
-	SetWindowPos(hwnd,NULL,x,y,0,0,SWP_NOZORDER|SWP_NOSIZE);
+	SetWindowPos(hwnd,top,x,y,0,0,SWP_NOSIZE);
 }
 void save_position(HWND hwnd)
 {
 	RECT rect={0};
+	int val;
 	GetWindowRect(hwnd,&rect);
 	set_ini_val(SECTION_WINDOW,KEY_XPOS,rect.left);
 	set_ini_val(SECTION_WINDOW,KEY_YPOS,rect.top);
+	val=IsDlgButtonChecked(hwnd,IDC_ON_TOP)==BST_CHECKED;
+	set_ini_val(SECTION_WINDOW,KEY_ON_TOP,val);
 }
 void quit_dialog(HWND hwnd)
 {
